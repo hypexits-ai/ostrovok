@@ -1,0 +1,9 @@
+# editor / assistant settings with local paths
+.claude/
+.vs/
+*.user
+
+# build output (the project builds into %TEMP%\ostrovok-build, but just in case)
+**/bin/
+**/obj/
+dist/
