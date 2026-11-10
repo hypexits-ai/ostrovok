@@ -63,7 +63,10 @@ const cur = { w: 280, h: 36, r: 18 }, vel = { w: 0, h: 0, r: 0 };
 let tgt = { ...cur }, spring = { k: 260, c: 26 }, running = false, last = 0;
 
 function mediaShown() { return !!S.media.has && !S.mediaDismissed; }
-function collapsedWidth() { return (mediaShown() || S.timer.running ? 330 : 280) + (S.tg.unread > 0 ? 44 : 0); }
+function collapsedWidth() {
+  const gpu = S.sys.gpu !== null && S.sys.gpu !== undefined;
+  return (mediaShown() || S.timer.running ? 330 : 280) + (S.tg.unread > 0 ? 44 : 0) + (gpu ? 30 : 0);
+}
 function visual() { if (S.hover) return 'expanded'; if (S.ev) return 'event'; if (S.idle) return 'mini'; return 'collapsed'; }
 // the mini layer sizes itself to its content (time, equalizer, CPU, GPU); the island follows it
 function miniWidth() { return Math.max(96, Math.ceil($('#mini').offsetWidth)); }
@@ -229,7 +232,7 @@ function renderWins() {
   const now = Date.now();
   const wins = S.wins.filter(w => !(closing.get(w.id) > now));
   $('#wins').innerHTML = wins.length ? wins.map(w =>
-    `<button class="wrow${w.active ? ' act' : ''}" data-win="${w.id}" data-drag="win" title="${esc(w.title)}">${appIcon(w.icon, w.name, 24)}<div><b>${esc(w.name)}</b><span>${w.title && w.title !== w.name ? esc(w.title) : '&nbsp;'}</span></div></button>`
+    `<button class="wrow${w.active ? ' act' : ''}" data-win="${w.id}" data-drag="win" title="${esc(w.title)}">${appIcon(w.icon, w.name, 28)}<div><b>${esc(w.name)}</b></div></button>`
   ).join('') : '<div class="wl-empty">Нет открытых окон</div>';
   const seen = new Set(), icons = [];
   for (const w of [...wins.filter(w => w.active), ...wins]) {
@@ -290,7 +293,7 @@ function renderSys() {
   setB('cpu-pct', (hasTemp ? temp + '° ' : '') + load + '%');
   // graphics card
   const gpu = S.sys.gpu, hasGpu = gpu !== null && gpu !== undefined;
-  $('#gpu-mini').hidden = !hasGpu; $('#mini .m-gpu').hidden = !hasGpu;
+  $('#gpu-mini').hidden = !hasGpu; $('#mini .m-gpu').hidden = !hasGpu; $('#c-gpu').hidden = !hasGpu;
   if (hasGpu) {
     document.documentElement.style.setProperty('--gc', gpu < 50 ? '#5be38f' : gpu < 80 ? '#ffc145' : '#ff5a5a');
     setB('gpu-main', gpu + '%'); setB('gpu-pct', gpu + '%');
