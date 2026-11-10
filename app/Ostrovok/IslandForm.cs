@@ -338,6 +338,7 @@ sealed class IslandForm : Form
         {
             case "play" or "next" or "prev" or "seek": _ = media.Command(c, v); break;
             case "taskmgr": Shell.Open("taskmgr.exe"); break;
+            case "netsettings": Shell.Open("ms-settings:network-status"); break;
             case "btsettings": Shell.Open("ms-settings:bluetooth"); break;
             case "wifisettings": Shell.Open("ms-settings:network-wifi"); break;
             case "location": Shell.Open("ms-settings:privacy-location"); break;
@@ -379,6 +380,20 @@ sealed class IslandForm : Form
         PushSys();
         lastUnread = -2;
         PollTelegram();
+        PushNet();
+    }
+
+    /// <summary>Internet: online or not, and whether over Wi-Fi or cable.</summary>
+    void PushNet()
+    {
+        try
+        {
+            var p = Windows.Networking.Connectivity.NetworkInformation.GetInternetConnectionProfile();
+            bool online = p != null && p.GetNetworkConnectivityLevel() == Windows.Networking.Connectivity.NetworkConnectivityLevel.InternetAccess;
+            string kind = p != null && p.IsWlanConnectionProfile ? "wifi" : "ethernet";
+            Post(new { t = "net", online, kind, name = p?.ProfileName });
+        }
+        catch (Exception ex) { Log.Write("net: " + ex.Message); }
     }
 
     /// <summary>Unread counter every second, and any new Telegram toasts from Windows' notification history.</summary>
@@ -632,6 +647,7 @@ sealed class IslandForm : Form
         foreach (var w in watching.ToList())
             if (w != "weather" && (w != "wifi" || tick % 4 == 0) && (w != "bt" || tick % 3 == 0)) PushWatched(w, false);
         if (tick % 2 == 0) PushSys();
+        if (tick % 5 == 0) PushNet();
         if (tick % 5 == 0 && audio.CheckDevice()) PushVolume(audio.Level, audio.Muted, false);
         if (tick % 60 == 0) TopMost = true;
 

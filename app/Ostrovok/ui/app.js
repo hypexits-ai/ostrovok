@@ -63,9 +63,11 @@ const cur = { w: 280, h: 36, r: 18 }, vel = { w: 0, h: 0, r: 0 };
 let tgt = { ...cur }, spring = { k: 260, c: 26 }, running = false, last = 0;
 
 function mediaShown() { return !!S.media.has && !S.mediaDismissed; }
+// sized from its contents: the wider side fits exactly, the narrower one is centred in its half,
+// so both groups end up the same distance from the time
 function collapsedWidth() {
-  const gpu = S.sys.gpu !== null && S.sys.gpu !== undefined;
-  return (mediaShown() || S.timer.running ? 330 : 280) + (S.tg.unread > 0 ? 44 : 0) + (gpu ? 30 : 0);
+  const L = $('#col .cl-left').offsetWidth, R = $('#col .cl-right').offsetWidth, T = $('#col .cl-mid').offsetWidth;
+  return Math.max(200, Math.ceil(28 + 28 + T + 2 * Math.max(L, R)));
 }
 function visual() { if (S.hover) return 'expanded'; if (S.ev) return 'event'; if (S.idle) return 'mini'; return 'collapsed'; }
 // the mini layer sizes itself to its content (time, equalizer, CPU, GPU); the island follows it
@@ -240,6 +242,16 @@ function renderWins() {
     icons.push(appIcon(w.icon, w.name, 18)); if (icons.length === 3) break;
   }
   $('#c-apps').innerHTML = icons.join('');
+  update();
+}
+
+/* ───────── internet connection ───────── */
+function onNet(m) {
+  const b = $('#b-net');
+  b.hidden = false;
+  b.querySelector('use').setAttribute('href', !m.online ? '#g-offline' : m.kind === 'wifi' ? '#g-wifi' : '#g-ethernet');
+  b.classList.toggle('off', !m.online);
+  b.title = !m.online ? 'Нет подключения к интернету' : (m.kind === 'wifi' ? 'Wi-Fi' : 'Кабель') + (m.name ? ' · ' + m.name : '') + ' — подключено';
 }
 $('#wins').addEventListener('click', e => {
   const b = e.target.closest('[data-win]'); if (!b || suppressClick) return;
@@ -562,6 +574,7 @@ if (host) host.addEventListener('message', e => {
     case 'radios': onRadios(m); break;
     case 'config': S.config = m; onRadios(S.radios || {}); break;
     case 'tg': onTgMessage(m); break;
+    case 'net': onNet(m); break;
     case 'tgUnread': onTgUnread(m.n); break;
     case 'leave': if (S.hover && !busy() && !Cells.holdsFocus()) leave(120); break;
     default: Cells.onHost(m);

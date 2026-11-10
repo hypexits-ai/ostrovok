@@ -39,10 +39,12 @@ body[data-playing="1"] .i-play,body[data-playing="0"] .i-pause{display:none}
 @keyframes eq{0%{transform:scaleY(.25)}45%{transform:scaleY(1)}100%{transform:scaleY(.45)}}
 body[data-playing="0"] .eq i{animation:none;transform:scaleY(.2);height:100%}
 
-.l-col{display:flex;align-items:center;justify-content:space-between;padding:0 13px;height:36px}
-.cl-left,.cl-right,.cl-apps{display:flex;align-items:center;gap:6px}
+/* time in the middle; each side's group is centred in its own half, and the island is sized
+   so the wider side just fits, so both sides sit the same distance from the time */
+.l-col{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);column-gap:14px;align-items:center;padding:0 14px;height:36px}
+.cl-left,.cl-right,.cl-apps{display:flex;align-items:center;gap:6px;justify-self:center;white-space:nowrap}
 .cl-right{gap:9px}
-.cl-mid{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-weight:600;font-size:13px;white-space:nowrap}
+.cl-mid{font-weight:600;font-size:13px;white-space:nowrap}
 .timer-chip{display:inline-flex;align-items:center;gap:4px;color:#ffb340}
 .timer-chip .ic{width:14px;height:14px;stroke-width:2}
 /* mini island */
@@ -69,6 +71,7 @@ body[data-playing="0"] .eq i{animation:none;transform:scaleY(.2);height:100%}
 .ib.sq{width:34px;height:34px;border-radius:11px;background:rgba(255,255,255,.08)}
 .ib.sq:hover{background:rgba(255,255,255,.16)}
 .ib.sq .ic{width:17px;height:17px}
+.ib.sq.net.off{color:#ff6b74}
 .ib[disabled]{opacity:.35;pointer-events:none}
 .cap{font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:rgba(255,255,255,.42);font-weight:600}
 .rc{border-radius:12px;transition:background .2s,box-shadow .2s}
