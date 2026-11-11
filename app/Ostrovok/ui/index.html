@@ -78,7 +78,7 @@
 </svg>
 
 <!-- one black "goo" layer draws the island, the split-off cell and the trash so they part like living cells -->
-<div class="goo" aria-hidden="true"><div class="blob" id="gMain"></div><div class="blob cg" id="gCell"></div><div class="blob trash-geo" id="gTrash"></div></div>
+<div class="goo" aria-hidden="true"><div class="blob" id="gCeil"></div><div class="blob" id="gMain"></div><div class="blob cg" id="gCell"></div><div class="blob trash-geo" id="gTrash"></div></div>
 
 <div id="hot"></div>
 <div class="island" id="island" data-state="collapsed">
@@ -111,7 +111,10 @@
       <div class="mid stg" style="--i:1">
         <div class="wcol rc" data-cell="favs" title="Правый клик — изменить избранное">
           <div class="cap">Избранное</div>
-          <div class="wheel" id="wheel"><div class="w-deco"></div><div class="w-items"></div><div class="w-empty" hidden>Закрепите приложения на панели задач, и они появятся здесь</div></div>
+          <div class="wbox">
+            <div class="wheel" id="wheel"><div class="w-deco"></div><div class="w-items"></div><div class="w-empty" hidden>Закрепите приложения на панели задач, и они появятся здесь</div></div>
+            <div class="w-ind" id="wind" hidden><svg aria-hidden="true"><path class="w-rail"/></svg><div class="w-dots"></div></div>
+          </div>
         </div>
         <div class="wl">
           <div class="cap">Открытые окна</div>

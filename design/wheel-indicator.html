@@ -1,0 +1,440 @@
+<title>Островок: индикатор колеса</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Onest:wght@500;600;700&display=swap">
+<style>
+/* Layout: design-review bench — variant switch, the live expanded island on a desktop strip, three live comparison cards. Single dark look, like the island itself. */
+:root{
+  --bg:#0f0e14; --surface:#18171f; --surface-2:#22202c; --line:#2c2a37;
+  --fg:#eceaf3; --muted:#9a97aa; --accent:#c4b2ff;
+  --ui:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --display:'Onest','Inter',system-ui,sans-serif;
+  color-scheme:dark;
+}
+html,body{background:var(--bg);color:var(--fg)}
+body{font-family:var(--ui);-webkit-font-smoothing:antialiased}
+.page{max-width:1120px;margin:0 auto;padding-block:28px 64px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:22px}
+header h1{font-family:var(--display);font-weight:700;font-size:34px;letter-spacing:-.02em;margin:0;text-wrap:balance}
+header p{margin:8px 0 0;color:var(--muted);font-size:14.5px;line-height:1.55;max-width:68ch}
+.eyebrow{font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin-bottom:8px;font-weight:600}
+.toolbar{display:flex;flex-wrap:wrap;gap:14px 22px;align-items:flex-end}
+.grp{display:flex;flex-direction:column;gap:6px;min-width:0}
+.glbl{font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.seg{display:inline-flex;flex-wrap:wrap;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:3px;gap:2px}
+.seg button{all:unset;cursor:pointer;padding:7px 14px;border-radius:9px;color:var(--muted);font-size:13px;font-weight:500;transition:background .2s,color .2s;white-space:nowrap}
+.seg button:hover{color:var(--fg)}
+.seg button[aria-pressed="true"]{background:var(--surface-2);color:var(--fg);box-shadow:inset 0 0 0 1px rgba(255,255,255,.06)}
+.seg button:focus-visible,.pick:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.tips{display:flex;flex-wrap:wrap;gap:8px 18px;color:var(--muted);font-size:13px;margin:0;padding:0;list-style:none}
+.tips li{display:flex;gap:7px;align-items:center}
+.tips kbd{font-family:var(--ui);font-size:11.5px;color:var(--fg);background:var(--surface-2);border:1px solid var(--line);border-radius:6px;padding:1px 6px}
+
+/* ───────── desktop strip with the expanded island ───────── */
+.stage{position:relative;width:100%;max-width:100%;aspect-ratio:820/372;border-radius:16px;overflow:hidden;border:1px solid var(--line);background:#000}
+.desk{position:absolute;left:0;top:0;width:820px;height:372px;transform-origin:0 0;overflow:hidden;color:#fff;font-variant-numeric:tabular-nums;user-select:none;-webkit-user-select:none;
+  background:radial-gradient(70% 70% at 84% 10%,rgba(236,204,255,.8),transparent 60%),radial-gradient(60% 80% at 8% 92%,rgba(64,36,146,.9),transparent 65%),linear-gradient(140deg,#2b1f63 0%,#5a3fb5 45%,#a98cf5 100%)}
+.island{position:absolute;left:50px;top:8px;width:720px;height:350px;border-radius:32px;background:#000;box-shadow:0 0 0 .5px rgba(255,255,255,.08),0 18px 50px rgba(10,0,40,.45);
+  display:grid;grid-template-rows:40px minmax(0,1fr) 46px;gap:10px;padding:16px 22px;box-sizing:border-box;font-size:12px}
+.xt{display:flex;align-items:center;gap:10px}
+.clock{display:flex;flex-direction:column;line-height:1.1}
+.clock b{font-family:var(--display);font-size:20px;font-weight:600;letter-spacing:-.01em}
+.clock span{font-size:11px;color:rgba(255,255,255,.5)}
+.sp{flex:1}
+.ib{width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.1);display:grid;place-items:center;flex:none}
+.ib svg{width:16px;height:16px;stroke:#fff;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.lift{display:flex;flex-direction:column;gap:2px}
+.lift i{width:24px;height:15px;border-radius:5px;background:rgba(255,255,255,.1);display:grid;place-items:center}
+.lift i svg{width:10px;height:10px;stroke:#fff;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.lift i.on{background:rgba(255,255,255,.28)}
+.mid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:22px;min-height:0}
+.cap{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.45);font-weight:600;text-align:center}
+.wl{display:grid;grid-template-rows:auto minmax(0,1fr);gap:6px;min-width:0;width:100%;max-width:250px;margin:0 auto}
+.wl-list{display:flex;flex-direction:column;gap:2px}
+.wrow{display:flex;align-items:center;gap:11px;padding:7px 10px;border-radius:12px;font-size:13.5px;font-weight:600}
+.wrow.act{background:rgba(255,255,255,.1)}
+.xb{display:flex;align-items:center;gap:10px}
+.search{width:106px;height:40px;border-radius:20px;background:rgba(255,255,255,.1);display:flex;align-items:center;gap:9px;padding:0 15px;box-sizing:border-box;color:rgba(255,255,255,.55);font-size:13px}
+.search svg{width:16px;height:16px;stroke:#fff;fill:none;stroke-width:2;stroke-linecap:round}
+.vsep{width:1px;height:24px;background:rgba(255,255,255,.12)}
+.ib.blue{background:#2f7bff}
+.vol{flex:1;height:40px;border-radius:20px;background:rgba(255,255,255,.08);display:flex;align-items:center;gap:10px;padding:0 14px;box-sizing:border-box;min-width:0}
+.vol svg{width:15px;height:15px;stroke:#fff;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.vol .bar{flex:1;height:5px;border-radius:5px;background:linear-gradient(to right,#fff 68%,rgba(255,255,255,.18) 68%);position:relative}
+.vol .bar::after{content:"";position:absolute;left:68%;top:50%;width:14px;height:14px;border-radius:50%;background:#fff;transform:translate(-50%,-50%)}
+.vol b{font-size:12px;font-weight:600;color:rgba(255,255,255,.7)}
+.gauge{display:flex;align-items:center;gap:7px;font-weight:700;font-size:13px}
+.gauge i{width:30px;height:30px;border-radius:50%;background:conic-gradient(#5be38f var(--p),rgba(255,255,255,.12) 0);display:grid;place-items:center;-webkit-mask:radial-gradient(circle,transparent 11px,#000 11.5px);mask:radial-gradient(circle,transparent 11px,#000 11.5px)}
+
+/* app tiles */
+.app{width:var(--s,28px);height:var(--s,28px);border-radius:calc(var(--s,28px) * .26);display:grid;place-items:center;flex:none;font-weight:700;font-size:calc(var(--s,28px) * .42);color:#fff;letter-spacing:-.02em;overflow:hidden}
+.app svg{width:62%;height:62%}
+
+/* ───────── favourites: drum + rotation indicator ───────── */
+.fav{display:grid;grid-template-rows:auto minmax(0,1fr);gap:4px;min-height:0;min-width:0;outline:none}
+.fav-body{position:relative;display:grid;grid-template-columns:minmax(0,1fr) 46px;min-height:0;height:100%;touch-action:none;cursor:default}
+.fav:focus-visible .fav-body{outline:2px solid var(--accent);outline-offset:4px;border-radius:14px}
+.drum{position:relative;height:100%;perspective:300px;perspective-origin:50% 50%;
+  -webkit-mask-image:linear-gradient(transparent 0%,rgba(0,0,0,.5) 8%,#000 30%,#000 70%,rgba(0,0,0,.5) 92%,transparent 100%);
+  mask-image:linear-gradient(transparent 0%,rgba(0,0,0,.5) 8%,#000 30%,#000 70%,rgba(0,0,0,.5) 92%,transparent 100%)}
+.drum::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:150;
+  background:linear-gradient(rgba(0,0,0,.92) 0%,rgba(0,0,0,.55) 22%,rgba(0,0,0,0) 38%,rgba(0,0,0,0) 62%,rgba(0,0,0,.55) 78%,rgba(0,0,0,.92) 100%)}
+.w-items{position:absolute;inset:0;transform-style:preserve-3d}
+.w-it{all:unset;position:absolute;left:50%;top:50%;cursor:pointer;will-change:transform,opacity;display:flex;align-items:center;gap:11px;width:172px;font-size:14px;font-weight:500;padding:3px 8px;border-radius:11px;box-sizing:border-box;transition:background .18s}
+.w-it span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.w-it.cur{font-weight:600}
+.w-it.hl{background:rgba(255,255,255,.1)}
+.w-it.launch .app{animation:launch .5s cubic-bezier(.3,1.6,.5,1)}
+@keyframes launch{35%{transform:scale(.72)}100%{transform:scale(1)}}
+
+.ind{position:relative;height:100%}
+.ind svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
+.ind .rail{fill:none;stroke-width:1.6;stroke-linecap:round}
+.ind .ticks{fill:none;stroke-width:1.2;stroke-linecap:round}
+.ind .win{fill:none;stroke:rgba(255,255,255,.4);stroke-width:1.4;display:none}
+.dot{all:unset;position:absolute;left:0;top:0;width:24px;height:24px;margin:-12px 0 0 -12px;display:grid;place-items:center;cursor:pointer;will-change:transform,opacity;border-radius:50%}
+.dot .core{width:10px;height:10px;border-radius:50%;background:#fff;transition:box-shadow .18s,transform .18s,background .18s}
+.dot .ico{position:absolute;inset:-3px;border-radius:50%;background:#16151c;box-shadow:0 0 0 1.5px rgba(255,255,255,.75),0 6px 16px rgba(0,0,0,.5);display:grid;place-items:center;opacity:0;transform:scale(.4);transition:opacity .16s,transform .2s cubic-bezier(.3,1.5,.5,1)}
+.dot .ico .app{--s:20px;border-radius:6px}
+.dot:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.dot.ping .core{animation:ping .55s ease-out}
+@keyframes ping{0%{box-shadow:0 0 0 0 rgba(255,255,255,.7)}100%{box-shadow:0 0 0 12px rgba(255,255,255,0)}}
+
+/* Variant: arc — a thin rail that repeats the drum's curve */
+.fav[data-variant="arc"] .dot.hov .core{transform:scale(1.45);box-shadow:0 0 0 3px rgba(255,255,255,.2),0 0 12px rgba(255,255,255,.55)}
+/* Variant: dial — fine ticks turn with the drum, a fixed ring marks the chosen app */
+.fav[data-variant="dial"] .win{display:block}
+.fav[data-variant="dial"] .dot .core{border-radius:5px}
+.fav[data-variant="dial"] .dot.hov .core{transform:scale(1.5);background:#fff;box-shadow:0 0 0 3px rgba(255,255,255,.18)}
+/* Variant: lens — no rail; dots swell under the pointer and the nearest one shows its app */
+.fav[data-variant="lens"] .rail{display:none}
+.fav[data-variant="lens"] .dot.hov .ico{opacity:1;transform:scale(1)}
+.fav[data-variant="lens"] .dot.hov .core{opacity:0}
+
+/* ───────── comparison cards ───────── */
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:16px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0;transition:border-color .2s}
+.card.sel{border-color:rgba(196,178,255,.55)}
+.card h2{font-family:var(--display);font-size:19px;font-weight:600;margin:0;display:flex;align-items:center;gap:8px}
+.card h2 small{font-family:var(--ui);font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--accent)}
+.card p{margin:0;color:var(--muted);font-size:13.5px;line-height:1.5}
+.mini{background:#000;border-radius:22px;padding:14px 10px 10px;height:236px;box-sizing:border-box;display:grid;color:#fff}
+.mini .fav{height:100%}
+.pick{all:unset;cursor:pointer;align-self:flex-start;font-size:13px;font-weight:600;color:var(--fg);background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:7px 12px}
+.card.sel .pick{color:var(--accent)}
+
+.toast{position:fixed;left:50%;bottom:calc(22px + env(safe-area-inset-bottom,0px));transform:translate(-50%,16px);opacity:0;pointer-events:none;background:#000;color:#fff;border:1px solid rgba(255,255,255,.12);border-radius:999px;padding:9px 16px 9px 10px;display:flex;align-items:center;gap:10px;font-size:13.5px;font-weight:500;transition:opacity .2s,transform .3s cubic-bezier(.2,.9,.2,1);z-index:20;max-width:calc(100% - 32px);box-sizing:border-box}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+.toast .app{--s:24px}
+
+@media (max-width:560px){ header h1{font-size:28px} }
+@media (prefers-reduced-motion:reduce){ .toast,.dot .core,.dot .ico{transition:none} .w-it.launch .app,.dot.ping .core{animation:none} }
+</style>
+
+<div class="page">
+  <header>
+    <div class="eyebrow">Островок · колесо избранного</div>
+    <h1>Индикатор колеса</h1>
+    <p>Справа от колеса избранного стоит дуга с кружком напротив каждого приложения. Кружки проворачиваются вместе с колесом. Под курсором кружок подсвечивается вместе со своим приложением, а клик сразу его запускает.</p>
+  </header>
+
+  <div class="toolbar">
+    <div class="grp">
+      <span class="glbl" id="lbl-var">Вариант на островке</span>
+      <div class="seg" role="group" aria-labelledby="lbl-var" id="seg-var">
+        <button type="button" data-v="arc" aria-pressed="true">Дуга</button>
+        <button type="button" data-v="dial" aria-pressed="false">Шкала</button>
+        <button type="button" data-v="lens" aria-pressed="false">Лупа</button>
+      </div>
+    </div>
+    <ul class="tips">
+      <li><kbd>Колесо мыши</kbd> один щелчок — одно приложение</li>
+      <li><kbd>Перетаскивание</kbd> крутит колесо</li>
+      <li><kbd>Клик</kbd> по кружку или названию запускает</li>
+    </ul>
+  </div>
+
+  <div class="stage" id="stage">
+    <div class="desk" id="desk">
+      <div class="island">
+        <div class="xt">
+          <div class="clock"><b id="clk">12:57</b><span id="date">среда, 11 ноября</span></div>
+          <div class="sp"></div>
+          <div class="lift"><i><svg viewBox="0 0 10 10"><path d="M2 6.5 5 3.5l3 3"/></svg></i><i class="on"><svg viewBox="0 0 10 10"><path d="M2 3.5 5 6.5l3-3"/></svg></i></div>
+          <span class="ib"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></span>
+          <span class="ib"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></svg></span>
+          <span class="ib"><svg viewBox="0 0 24 24"><path d="M12 3v8"/><path d="M6.3 7a8 8 0 1 0 11.4 0"/></svg></span>
+        </div>
+        <div class="mid">
+          <div class="fav" id="stage-fav" tabindex="0" aria-label="Избранное"></div>
+          <div class="wl">
+            <div class="cap">Открытые окна</div>
+            <div class="wl-list" id="wins"></div>
+          </div>
+        </div>
+        <div class="xb">
+          <span class="search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>Поиск</span>
+          <span class="vsep"></span>
+          <span class="ib blue"><svg viewBox="0 0 24 24"><path d="m7 7 10 10-5 4.5V2.5L17 7 7 17"/></svg></span>
+          <span class="ib"><svg viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="m16 9.5 5 5M21 9.5l-5 5"/></svg></span>
+          <span class="vol"><svg viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M16 9a4 4 0 0 1 0 6"/></svg><span class="bar"></span><b>68</b></span>
+          <span class="gauge"><i style="--p:8%"></i>8%</span>
+          <span class="gauge"><i style="--p:3%"></i>3%</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="cards" id="cards"></div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+'use strict';
+/* ───────── sample apps (letter tiles stand in for real icons) ───────── */
+const svgPlane = '<svg viewBox="0 0 24 24" fill="#fff"><path d="M3 11.5 20 4.5l-3 15-5.5-4-3 3 .5-4.5 8-7.5-10 6.5z"/></svg>';
+const svgStar = '<svg viewBox="0 0 24 24" stroke="#fff" stroke-width="2.6" stroke-linecap="round"><path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6 5.6 18.4"/></svg>';
+const svgWave = '<svg viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.4" stroke-linecap="round"><path d="M6 9.5c4-1.3 8.5-1 12 1M7 13c3.3-1 6.6-.7 9.5.8M8 16.3c2.6-.7 5-.5 7 .6"/></svg>';
+const svgFolder = '<svg viewBox="0 0 24 24"><path d="M2.5 6.5a2 2 0 0 1 2-2h5l2 2.2h8a2 2 0 0 1 2 2v9.8a2 2 0 0 1-2 2h-15a2 2 0 0 1-2-2z" fill="#f6c343"/><path d="M2.5 10h19v8.5a2 2 0 0 1-2 2h-15a2 2 0 0 1-2-2z" fill="#ffd866"/></svg>';
+const svgNote = '<svg viewBox="0 0 24 24" stroke="#2c5a8a" stroke-width="1.8" stroke-linecap="round"><path d="M7 8h10M7 12h10M7 16h6"/></svg>';
+const APPS = [
+  { name: 'Claude', bg: '#d97757', g: svgStar },
+  { name: 'Google Chrome', bg: 'conic-gradient(from 30deg,#e8453c 0 120deg,#34a853 0 240deg,#fbbc04 0)', g: '<i style="width:44%;height:44%;border-radius:50%;background:#4285f4;box-shadow:0 0 0 2.5px #fff"></i>', round: true },
+  { name: 'Проводник', bg: 'transparent', g: svgFolder, full: true },
+  { name: 'Telegram', bg: 'linear-gradient(160deg,#37bbfe,#1d93d2)', g: svgPlane, round: true },
+  { name: 'Substance 3D Painter', bg: '#0f2a1d', g: '<span style="color:#7cf28f">Pt</span>' },
+  { name: 'After Effects', bg: '#1d0b3a', g: '<span style="color:#d7a0ff">Ae</span>' },
+  { name: 'Spotify', bg: '#1ed760', g: svgWave, round: true },
+  { name: 'Блокнот', bg: 'linear-gradient(160deg,#e9f3ff,#bcd8f7)', g: svgNote }
+];
+const tile = (a, s) => `<span class="app" style="--s:${s}px;background:${a.bg};${a.round ? 'border-radius:50%;' : ''}">${a.full ? a.g.replace('<svg', '<svg style="width:100%;height:100%"') : a.g}</span>`;
+const WINS = [0, 2, 1, 3];
+document.getElementById('wins').innerHTML = WINS.map((i, k) => `<div class="wrow${k === 0 ? ' act' : ''}">${tile(APPS[i], 28)}<span>${APPS[i].name}</span></div>`).join('');
+
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const STEP = .48;               // radians between neighbours on the drum (same as the island)
+const PERSP = 300, DEPTH = 40;  // drum perspective, so dots line up with the projected names
+
+/* ───────── toast ───────── */
+const toastEl = document.getElementById('toast'); let toastT = 0;
+function toast(a) {
+  toastEl.innerHTML = tile(a, 24) + `<span>Запуск: ${a.name}</span>`;
+  toastEl.classList.add('on'); clearTimeout(toastT);
+  toastT = setTimeout(() => toastEl.classList.remove('on'), 1600);
+}
+
+/* ───────── favourites drum with a rotation indicator ───────── */
+let uid = 0;
+class Fav {
+  constructor(el, variant, pos = 0) {
+    this.el = el; this.n = APPS.length; this.pos = pos; this.target = pos; this.hover = -1; this.lensHov = -1; this.py = null;
+    this.acc = 0; this.lastNotch = 0; this.drag = null; this.dirty = true; this.id = 'g' + (++uid);
+    el.innerHTML = `<div class="cap">Избранное</div>
+      <div class="fav-body">
+        <div class="drum"><div class="w-items"></div></div>
+        <div class="ind">
+          <svg aria-hidden="true"><defs><linearGradient id="${this.id}" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".3" stop-color="#fff" stop-opacity=".26"/>
+            <stop offset=".7" stop-color="#fff" stop-opacity=".26"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient></defs>
+            <path class="rail" stroke="url(#${this.id})"/><path class="ticks" stroke="url(#${this.id})"/><circle class="win" r="10"/></svg>
+          <div class="dots"></div>
+        </div>
+      </div>`;
+    this.body = el.querySelector('.fav-body'); this.drum = el.querySelector('.drum'); this.ind = el.querySelector('.ind');
+    this.grad = el.querySelector('linearGradient'); this.rail = el.querySelector('.rail'); this.ticks = el.querySelector('.ticks'); this.win = el.querySelector('.win');
+    const box = el.querySelector('.w-items'), dots = el.querySelector('.dots');
+    this.items = APPS.map((a, i) => {
+      const b = document.createElement('button'); b.className = 'w-it'; b.type = 'button'; b.tabIndex = -1;
+      b.innerHTML = tile(a, 28) + `<span>${a.name}</span>`;
+      b.addEventListener('click', () => { if (!this.dragged()) this.go(i); });
+      b.addEventListener('pointerenter', () => this.setHover(i));
+      b.addEventListener('pointerleave', () => this.setHover(-1));
+      box.append(b); return b;
+    });
+    this.dots = APPS.map((a, i) => {
+      const d = document.createElement('button'); d.className = 'dot'; d.type = 'button'; d.tabIndex = -1;
+      d.setAttribute('aria-label', 'Запустить ' + a.name);
+      d.innerHTML = `<span class="core"></span><span class="ico">${tile(a, 20)}</span>`;
+      d.addEventListener('click', () => { if (!this.dragged()) this.go(i); });
+      d.addEventListener('pointerenter', () => { if (this.variant !== 'lens') this.setHover(i); });
+      d.addEventListener('pointerleave', () => { if (this.variant !== 'lens') this.setHover(-1); });
+      dots.append(d); return d;
+    });
+    this.setVariant(variant);
+    this.bind();
+    new ResizeObserver(() => { this.measure(); this.dirty = true; kick(); }).observe(this.body);
+    Fav.all.push(this);
+  }
+  setVariant(v) { this.variant = v; this.el.dataset.variant = v; this.dirty = true; this.measure(); kick(); }
+  measure() {
+    const h = this.body.clientHeight || 184, w = this.ind.clientWidth || 46;
+    this.h = h; this.R = Math.min(80, h / 2 - 12); this.cx = w - 14; this.depth = this.variant === 'lens' ? 13 : 17;
+    this.grad.setAttribute('y2', h);
+    // the rail: the same slice of a circle the names travel on, seen slightly from the side
+    let d = '';
+    for (let a = -1.55; a <= 1.551; a += .05) { const p = this.pt(a); d += (d ? 'L' : 'M') + p.x.toFixed(1) + ' ' + p.y.toFixed(1); }
+    this.rail.setAttribute('d', d);
+    const c = this.pt(0); this.win.setAttribute('cx', c.x); this.win.setAttribute('cy', c.y);
+  }
+  pt(a) {
+    const z = (Math.cos(a) - 1) * DEPTH, k = PERSP / (PERSP - z);
+    return { x: this.cx + (Math.cos(a) - 1) * this.depth, y: this.h / 2 + Math.sin(a) * this.R * k };
+  }
+  wrap(d) { const n = this.n; d = ((d % n) + n) % n; return d > n / 2 ? d - n : d; }
+  sel() { const n = this.n; return ((Math.round(this.target) % n) + n) % n; }
+  dragged() { return this.drag && this.drag.moved; }
+  setHover(i) { if (this.hover !== i) { this.hover = i; this.dirty = true; kick(); } }
+  go(i) {
+    const off = this.wrap(i - this.target);
+    this.target = Math.round(this.target + off); kick();
+    const it = this.items[i], dot = this.dots[i];
+    setTimeout(() => {
+      it.classList.remove('launch'); dot.classList.remove('ping'); void it.offsetWidth;
+      it.classList.add('launch'); dot.classList.add('ping');
+    }, reduce ? 0 : Math.min(320, 90 + Math.abs(off) * 80));
+    toast(APPS[i]);
+  }
+  turn(s) { this.target = Math.round(this.target) + s; kick(); }
+  bind() {
+    const b = this.body;
+    b.addEventListener('wheel', e => {
+      e.preventDefault();
+      const d = Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX; if (!d) return;
+      const now = performance.now();
+      if (e.deltaMode === 1 || Math.abs(d) >= 40) {          // a mouse notch: exactly one app
+        if (now - this.lastNotch < 70) return;
+        this.lastNotch = now; this.acc = 0; this.turn(Math.sign(d));
+      } else {                                                 // touchpad: gather small deltas
+        this.acc += d; if (Math.abs(this.acc) >= 90) { this.turn(Math.sign(this.acc)); this.acc = 0; }
+      }
+    }, { passive: false });
+    b.addEventListener('pointerdown', e => { if (e.button === 0) this.drag = { y: e.clientY, acc: 0, moved: false, id: e.pointerId }; });
+    b.addEventListener('pointermove', e => {
+      if (this.variant === 'lens') {
+        const r = this.ind.getBoundingClientRect(), s = r.height / this.h;
+        const inside = e.clientX >= r.left - 6 && e.clientX <= r.right + 6;
+        this.py = inside ? (e.clientY - r.top) / s : null; this.dirty = true; kick();
+      }
+      const g = this.drag; if (!g) return;
+      const s = this.body.getBoundingClientRect().height / this.h;
+      g.acc += -(e.clientY - g.y) / s; g.y = e.clientY;
+      if (!g.moved && Math.abs(g.acc) > 6) { g.moved = true; try { b.setPointerCapture(g.id); } catch (_) {} this.setHover(-1); }
+      if (g.moved) while (Math.abs(g.acc) >= 30) { const s2 = Math.sign(g.acc); this.target += s2; g.acc -= s2 * 30; kick(); }
+    });
+    b.addEventListener('pointerleave', () => { if (this.py !== null) { this.py = null; this.setHover(-1); this.dirty = true; kick(); } });
+    ['pointerup', 'pointercancel'].forEach(n => b.addEventListener(n, () => setTimeout(() => { this.drag = null; }, 0)));
+    this.el.addEventListener('keydown', e => {
+      if (e.key === 'ArrowDown') { e.preventDefault(); this.turn(1); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); this.turn(-1); }
+      else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.go(this.sel()); }
+    });
+  }
+  step(dt) {
+    const d = this.target - this.pos;
+    if (Math.abs(d) < .001) { if (this.pos !== this.target) { this.pos = this.target; return true; } return false; }
+    this.pos += d * (1 - Math.exp(-dt * (reduce ? 80 : 11))); return true;
+  }
+  render() {
+    const lens = this.variant === 'lens';
+    let near = -1, nearD = 1e9;
+    this.items.forEach((el, i) => {
+      const off = this.wrap(i - this.pos), ao = Math.abs(off), a = off * STEP;
+      const s = 1 - Math.min(.3, ao * .1);
+      el.style.transform = `translate(-50%,-50%) translateY(${(Math.sin(a) * this.R).toFixed(2)}px) translateZ(${((Math.cos(a) - 1) * DEPTH).toFixed(2)}px) rotateX(${(-a * 57.3).toFixed(2)}deg) scale(${s.toFixed(3)})`;
+      let o = ao > 3 ? 0 : Math.max(0, 1 - ao * .36);
+      const hl = i === this.hover && o > .02;
+      if (hl) o = Math.max(o, .9);
+      el.style.opacity = o.toFixed(3);
+      el.style.zIndex = hl ? 160 : 100 - Math.round(ao * 10);
+      el.style.pointerEvents = o < .05 ? 'none' : '';
+      el.classList.toggle('cur', ao < .5); el.classList.toggle('hl', hl);
+      // dot opposite the app
+      const p = this.pt(a), d = this.dots[i];
+      const fade = ao > 3.1 ? 0 : Math.max(0, 1 - ao * .27), hot = Math.max(0, 1 - ao);
+      let sc = .55 + .45 * hot;
+      if (lens && this.py !== null && fade > .05) {
+        const dist = Math.abs(p.y - this.py); sc *= 1 + 1.25 * Math.max(0, 1 - dist / 34);
+        if (dist < nearD) { nearD = dist; near = i; }
+      }
+      d.style.transform = `translate(${p.x.toFixed(2)}px,${p.y.toFixed(2)}px) scale(${sc.toFixed(3)})`;
+      d.style.opacity = (fade * (.42 + .58 * hot)).toFixed(3);
+      if (i === this.hover) d.style.opacity = Math.max(fade, .95).toFixed(3);
+      d.style.pointerEvents = fade < .08 ? 'none' : '';
+      d.style.zIndex = i === this.hover ? 5 : 1;
+      d.classList.toggle('hov', i === this.hover);
+    });
+    if (lens) {
+      // the lens owns the hover only while the pointer is over the dots; hovering a name still works
+      const h = this.py !== null && nearD < 16 ? near : -1;
+      if (h !== this.lensHov) {
+        if (h >= 0 || this.hover === this.lensHov) { this.hover = h; this.dirty = true; }
+        this.lensHov = h;
+      }
+    }
+    // dial: fine ticks fixed to the drum, so they turn with it between apps
+    if (this.variant === 'dial') {
+      let d = '';
+      for (let m = Math.ceil((this.pos - 3.3) * 4); m <= Math.floor((this.pos + 3.3) * 4); m++) {
+        if (((m % 4) + 4) % 4 === 0) continue;
+        const a = (m / 4 - this.pos) * STEP, p = this.pt(a);
+        const tx = -Math.sin(a) * this.depth, ty = Math.cos(a) * this.R, L = Math.hypot(tx, ty) || 1;
+        const nx = ty / L, ny = -tx / L, len = ((m % 2) + 2) % 2 ? 3 : 5;
+        d += `M${(p.x - nx * 1).toFixed(1)} ${(p.y - ny * 1).toFixed(1)}L${(p.x + nx * len).toFixed(1)} ${(p.y + ny * len).toFixed(1)}`;
+      }
+      this.ticks.setAttribute('d', d);
+    } else this.ticks.setAttribute('d', '');
+  }
+}
+Fav.all = [];
+
+/* one animation loop for every drum on the page */
+let running = false, last = 0;
+function kick() { if (!running) { running = true; last = performance.now(); requestAnimationFrame(loop); } }
+function loop(t) {
+  const dt = Math.min(.034, Math.max(0, (t - last) / 1000)); last = t;
+  let moving = false;
+  for (const f of Fav.all) { const m = f.step(dt); if (m || f.dirty) { f.dirty = false; f.render(); } moving = moving || m || f.dirty; }
+  if (moving) requestAnimationFrame(loop); else running = false;
+}
+
+/* ───────── page wiring ───────── */
+const VARIANTS = [
+  { v: 'arc', name: 'Дуга', tag: 'проще всего', text: 'Тонкая дуга повторяет изгиб колеса. Кружки скользят по ней, текущий крупнее и ярче. Под курсором кружок увеличивается и подсвечивает своё приложение.' },
+  { v: 'dial', name: 'Шкала', tag: 'ощущение поворота', text: 'Дуга с мелкими делениями, как ребристое колёсико мыши. Деления крутятся вместе с колесом, поэтому поворот виден и между приложениями. Выбранное стоит в кольце посередине.' },
+  { v: 'lens', name: 'Лупа', tag: 'видно, что запустится', text: 'Без линии, только кружки. Под курсором они увеличиваются, как в доке, а ближайший превращается в иконку приложения. Клик по иконке запускает его.' }
+];
+const stageFav = new Fav(document.getElementById('stage-fav'), 'arc', 2);
+const cardsEl = document.getElementById('cards');
+cardsEl.innerHTML = VARIANTS.map(x => `<article class="card" data-v="${x.v}">
+  <h2>${x.name} <small>${x.tag}</small></h2>
+  <div class="mini"><div class="fav" tabindex="0" aria-label="Избранное, вариант ${x.name}"></div></div>
+  <p>${x.text}</p>
+  <button class="pick" type="button" data-v="${x.v}">Показать на островке</button>
+</article>`).join('');
+cardsEl.querySelectorAll('.card').forEach((c, k) => new Fav(c.querySelector('.fav'), c.dataset.v, k * 3));
+
+function choose(v) {
+  stageFav.setVariant(v);
+  document.querySelectorAll('#seg-var button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === v)));
+  cardsEl.querySelectorAll('.card').forEach(c => c.classList.toggle('sel', c.dataset.v === v));
+  try { localStorage.setItem('ostrovok-wheel-variant', v); } catch (_) {}
+}
+document.getElementById('seg-var').addEventListener('click', e => { const b = e.target.closest('button'); if (b) choose(b.dataset.v); });
+cardsEl.addEventListener('click', e => { const b = e.target.closest('.pick'); if (b) { choose(b.dataset.v); document.getElementById('stage').scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' }); } });
+let saved = 'arc'; try { saved = localStorage.getItem('ostrovok-wheel-variant') || 'arc'; } catch (_) {}
+choose(VARIANTS.some(x => x.v === saved) ? saved : 'arc');
+
+/* scale the 820×372 desktop strip to the stage */
+const stage = document.getElementById('stage'), desk = document.getElementById('desk');
+new ResizeObserver(() => { desk.style.transform = `scale(${stage.clientWidth / 820})`; }).observe(stage);
+
+/* live clock in the island header */
+function clock() {
+  const d = new Date();
+  document.getElementById('clk').textContent = d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  document.getElementById('date').textContent = d.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' });
+}
+clock(); setInterval(clock, 10000);
+kick();
+</script>

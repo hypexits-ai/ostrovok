@@ -199,7 +199,8 @@ $('#cell').addEventListener('pointerleave', () => { if (!busy() && !Cells.holdsF
 
 /* ───────── favourites wheel ───────── */
 const wheel = {
-  root: $('#wheel'), box: $('#wheel .w-items'), items: [], n: 0, pos: 0, target: 0, acc: 0, drag: null,
+  root: $('#wheel'), box: $('#wheel .w-items'), ind: $('#wind'), dotBox: $('#wind .w-dots'), rail: $('#wind .w-rail'),
+  items: [], dots: [], n: 0, pos: 0, target: 0, acc: 0, drag: null, hover: -1, h: 0, R: 84,
   set(list) {
     const keep = this.items.length ? S.favs[this.sel()]?.id : null;
     this.box.innerHTML = '';
@@ -207,9 +208,22 @@ const wheel = {
       const b = document.createElement('button');
       b.className = 'w-it'; b.title = a.name;
       b.innerHTML = appIcon(a.icon, a.name, 28) + `<span>${esc(a.name)}</span>`;
-      b.addEventListener('click', () => { if (this.drag && this.drag.moved) return; this.pick(i); });
+      b.addEventListener('click', () => { if (this.drag && this.drag.moved) return; this.go(i); });
+      b.addEventListener('pointerenter', () => this.setHover(i));
+      b.addEventListener('pointerleave', () => this.setHover(-1));
       this.box.append(b); return b;
     });
+    this.dotBox.innerHTML = '';
+    this.dots = list.map((a, i) => {
+      const d = document.createElement('button');
+      d.className = 'w-dot'; d.title = a.name; d.innerHTML = '<i></i>';
+      d.addEventListener('click', () => { if (this.drag && this.drag.moved) return; this.go(i); });
+      d.addEventListener('pointerenter', () => this.setHover(i));
+      d.addEventListener('pointerleave', () => this.setHover(-1));
+      this.dotBox.append(d); return d;
+    });
+    this.ind.hidden = list.length === 0;
+    this.hover = -1; this.h = 0;
     this.n = list.length;
     $('#wheel .w-empty').hidden = this.n > 0;
     $('#wheel .w-deco').hidden = this.n === 0;
@@ -219,12 +233,36 @@ const wheel = {
   },
   wrap(d) { const n = this.n || 1; d = ((d % n) + n) % n; return d > n / 2 ? d - n : d; },
   sel() { const n = this.n || 1; return ((Math.round(this.target) % n) + n) % n; },
-  pick(i) { const off = this.wrap(i - this.target); if (Math.abs(off) < .5) this.launch(); else { this.target += off; kick(); } },
-  launch() {
+  // a click on a name or its dot launches that app at once; the drum rolls over to it meanwhile
+  go(i) {
+    const off = this.wrap(i - this.target);
+    this.target = Math.round(this.target + off); kick();
+    this.launch(i, Math.abs(off));
+  },
+  launch(i = this.sel(), dist = 0) {
     if (!this.n) return;
-    const i = this.sel(), el = this.items[i];
-    el.classList.remove('launch'); void el.offsetWidth; el.classList.add('launch');
+    const el = this.items[i], dot = this.dots[i];
+    setTimeout(() => {
+      el.classList.remove('launch'); dot.classList.remove('ping'); void el.offsetWidth;
+      el.classList.add('launch'); dot.classList.add('ping');
+    }, reduce ? 0 : Math.min(320, 90 + dist * 80));
     send({ t: 'launch', id: S.favs[i].id });
+  },
+  setHover(i) {
+    if (this.hover === i) return;
+    this.hover = i; this.root.classList.toggle('peek', i >= 0); this.render();
+  },
+  // the dots sit where the names are drawn: same angle, same perspective as the drum
+  pt(a) {
+    const z = (Math.cos(a) - 1) * 40, k = 300 / (300 - z);
+    return { x: 30 + (Math.cos(a) - 1) * 17, y: this.h / 2 + Math.sin(a) * this.R * k };
+  },
+  measure() {
+    const h = this.root.clientHeight;
+    if (!h || h === this.h) return;
+    this.h = h; let d = '';
+    for (let a = -1.55; a <= 1.551; a += .05) { const p = this.pt(a); d += (d ? 'L' : 'M') + p.x.toFixed(1) + ' ' + p.y.toFixed(1); }
+    this.rail.setAttribute('d', d);
   },
   step(dt) {
     const d = this.target - this.pos;
@@ -233,14 +271,24 @@ const wheel = {
   },
   render() {
     // a drum: items further from the centre turn away, shrink and fade faster
+    this.measure();
     this.items.forEach((el, i) => {
       const off = this.wrap(i - this.pos), ao = Math.abs(off), a = off * .48;
       const s = 1 - Math.min(.3, ao * .1);
       el.style.transform = `translate(-50%,-50%) translateY(${(Math.sin(a) * 84).toFixed(2)}px) translateZ(${((Math.cos(a) - 1) * 40).toFixed(2)}px) rotateX(${(-a * 57.3).toFixed(2)}deg) scale(${s.toFixed(3)})`;
-      const o = ao > 3 ? 0 : Math.max(0, 1 - ao * .36);
+      let o = ao > 3 ? 0 : Math.max(0, 1 - ao * .36);
+      const hl = i === this.hover && o > .02;
+      if (hl) o = Math.max(o, .9);
       el.style.opacity = o.toFixed(3); el.style.zIndex = 100 - Math.round(ao * 10);
       el.style.pointerEvents = o < .05 ? 'none' : '';
-      el.classList.toggle('cur', ao < .5);
+      el.classList.toggle('cur', ao < .5); el.classList.toggle('hl', hl);
+      // its dot on the arc: the current one big and white, the rest smaller and dimmer toward the ends
+      const d = this.dots[i]; if (!d || !this.h) return;
+      const p = this.pt(a), fade = ao > 3.1 ? 0 : Math.max(0, 1 - ao * .27), hot = Math.max(0, 1 - ao);
+      d.style.transform = `translate(${p.x.toFixed(2)}px,${p.y.toFixed(2)}px) scale(${(.55 + .45 * hot).toFixed(3)})`;
+      d.style.opacity = (i === this.hover ? Math.max(fade, .95) : fade * (.42 + .58 * hot)).toFixed(3);
+      d.style.pointerEvents = fade < .08 ? 'none' : '';
+      d.classList.toggle('hov', i === this.hover);
     });
   }
 };
@@ -263,15 +311,16 @@ $('.mid .wcol').addEventListener('wheel', e => {
   }
   kick();
 }, { passive: false });
-wheel.root.addEventListener('pointerdown', e => { if (e.button === 0) wheel.drag = { y: e.clientY, acc: 0, moved: false, id: e.pointerId }; });
-wheel.root.addEventListener('pointermove', e => {
+const wbox = $('.wbox');
+wbox.addEventListener('pointerdown', e => { if (e.button === 0) wheel.drag = { y: e.clientY, acc: 0, moved: false, id: e.pointerId }; });
+wbox.addEventListener('pointermove', e => {
   const g = wheel.drag; if (!g || !wheel.n) return;
   g.acc += -(e.clientY - g.y); g.y = e.clientY;
-  if (!g.moved && Math.abs(g.acc) > 6) { g.moved = true; try { wheel.root.setPointerCapture(g.id); } catch (_) {} }
+  if (!g.moved && Math.abs(g.acc) > 6) { g.moved = true; try { wbox.setPointerCapture(g.id); } catch (_) {} wheel.setHover(-1); }
   while (Math.abs(g.acc) >= 30) { const s = Math.sign(g.acc); wheel.target += s; g.acc -= s * 30; }
   kick();
 });
-['pointerup', 'pointercancel'].forEach(n => wheel.root.addEventListener(n, () => setTimeout(() => { wheel.drag = null; }, 0)));
+['pointerup', 'pointercancel'].forEach(n => wbox.addEventListener(n, () => setTimeout(() => { wheel.drag = null; }, 0)));
 
 /* ───────── open windows ───────── */
 const closing = new Map();

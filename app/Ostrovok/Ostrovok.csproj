@@ -13,7 +13,7 @@
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <Product>Островок</Product>
     <AssemblyTitle>Островок</AssemblyTitle>
-    <Version>0.2.3</Version>
+    <Version>0.2.4</Version>
     <NoWarn>$(NoWarn);CA1416;WFO1000;MSB3277</NoWarn>
     <!-- the project folder path is long; keep build output short to stay under MAX_PATH -->
     <BaseOutputPath>$(TEMP)\ostrovok-build\bin\</BaseOutputPath>
