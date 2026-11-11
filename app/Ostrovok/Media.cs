@@ -65,8 +65,9 @@ sealed class MediaWatcher
             try
             {
                 var next = Pick();
-                string nextId = SafeId(next), curId = SafeId(session);
-                if (next == null || session == null || nextId != curId)
+                // compare the objects, not the app names: Yandex Music builds a new session with the same name
+                // on every track switch, and staying on the old one left the island without updates for seconds
+                if (!ReferenceEquals(next, session))
                 {
                     var old = session;
                     session = next;
@@ -90,11 +91,6 @@ sealed class MediaWatcher
         _ = RefreshAsync();
     }
 
-    static string SafeId(GlobalSystemMediaTransportControlsSession s)
-    {
-        try { return s?.SourceAppUserModelId; } catch { return null; }
-    }
-
     void OnProps(GlobalSystemMediaTransportControlsSession s, MediaPropertiesChangedEventArgs e) => _ = RefreshAsync();
     void OnPlayback(GlobalSystemMediaTransportControlsSession s, PlaybackInfoChangedEventArgs e) => _ = RefreshAsync();
     // timeline updates arrive often; only tell the page, no need to reload the cover
@@ -103,41 +99,132 @@ sealed class MediaWatcher
     /// <summary>Raised on a background thread when the track position jumps.</summary>
     public event Action TimelineChanged;
 
+    // While an app switches tracks it answers with nothing for a while: Yandex Music even removes its session
+    // until the next track has loaded, which took up to 7 s in tests. The island keeps the last track on screen
+    // through such gaps (Switching) instead of "nothing is playing": up to LongGrace after a button press or
+    // while music was playing (a track ending switches too), else Grace (the app was probably closed).
+    static readonly TimeSpan Grace = TimeSpan.FromSeconds(3), LongGrace = TimeSpan.FromSeconds(15);
+    // After a new title the app may still hand out the old cover, or none yet: keep looking for the new one this long.
+    static readonly TimeSpan ArtWindow = TimeSpan.FromSeconds(4);
+    // a button pressed while the app had no session is sent once it is back, if that happens soon enough
+    static readonly TimeSpan PendingLife = TimeSpan.FromSeconds(12);
+    DateTime lastGood = DateTime.MinValue, keyChangedAt = DateTime.MinValue, lastCommandAt = DateTime.MinValue, pendingAt;
+    string artHash, staleHash, signature, pendingCmd;
+    bool thumbMissing, lastPlaying;
+    int retryQueued;
+
+    /// <summary>The app is between tracks: the last track is still shown, the next one is not known yet.</summary>
+    public bool Switching;
+    // covers of recent tracks: going back to one shows its cover at once, while the app is still loading it
+    readonly Dictionary<string, (string img, string hash)> artCache = new();
+    readonly Queue<string> artOrder = new();
+
+    void Remember(string key, string img, string hash)
+    {
+        if (!artCache.ContainsKey(key))
+        {
+            artOrder.Enqueue(key);
+            if (artOrder.Count > 40) artCache.Remove(artOrder.Dequeue());
+        }
+        artCache[key] = (img, hash);
+    }
+
     public async Task RefreshAsync()
     {
+        bool retry = false, changed;
+        string sendNow = null;
         await gate.WaitAsync();
         try
         {
             var s = session;
-            if (s == null)
+            var now = DateTime.Now;
+            GlobalSystemMediaTransportControlsSessionPlaybackInfo pb = null;
+            GlobalSystemMediaTransportControlsSessionMediaProperties props = null;
+            if (s != null)
             {
-                Has = Playing = false; Title = Artist = Art = null; artKey = null;
+                try { pb = s.GetPlaybackInfo(); props = await s.TryGetMediaPropertiesAsync(); }
+                catch { props = null; }   // a session that is being replaced can throw for a moment
+            }
+
+            if (string.IsNullOrWhiteSpace(props?.Title))
+            {
+                var grace = lastPlaying || now - lastCommandAt < LongGrace ? LongGrace : Grace;
+                if (Has && now - lastGood < grace) { retry = true; Switching = true; }   // a gap: keep the last track
+                else if (Has || Title != null)
+                {
+                    Has = Playing = Switching = false; Title = Artist = Art = null;
+                    artKey = artHash = staleHash = pendingCmd = null;
+                }
             }
             else
             {
-                var pb = s.GetPlaybackInfo();
+                lastGood = now;
+                // back after a gap: the app is often still fetching the cover, so give it the full wait from now
+                if (Switching) keyChangedAt = now;
+                Has = true; Switching = false;
+                if (pendingCmd != null)
+                {
+                    if (now - pendingAt < PendingLife) sendNow = pendingCmd;
+                    pendingCmd = null;
+                }
                 Playing = pb?.PlaybackStatus == PlaybackStatus.Playing;
+                lastPlaying = Playing;
                 CanNext = pb?.Controls?.IsNextEnabled ?? false;
                 CanPrev = pb?.Controls?.IsPreviousEnabled ?? false;
                 CanSeek = pb?.Controls?.IsPlaybackPositionEnabled ?? false;
-
-                var props = await s.TryGetMediaPropertiesAsync();
-                Title = props?.Title ?? "";
-                Artist = props?.Artist;
-                if (string.IsNullOrEmpty(Artist)) Artist = props?.AlbumArtist ?? "";
-                Has = !string.IsNullOrWhiteSpace(Title);
+                Title = props.Title;
+                Artist = string.IsNullOrEmpty(props.Artist) ? props.AlbumArtist ?? "" : props.Artist;
 
                 var key = Title + "\u0001" + Artist;
-                if (key != artKey) { Art = null; artKey = key; }
-                if (Art == null && props?.Thumbnail != null) Art = await LoadArt(props.Thumbnail);
+                if (key != artKey)
+                {
+                    artKey = key; keyChangedAt = now; staleHash = artHash;
+                    if (artCache.TryGetValue(key, out var known)) { Art = known.img; artHash = known.hash; }
+                }
+                // The cover is checked on every look (cheap: the bytes are hashed, and decoded only when they change).
+                // Right after a new title the app may still hand out the previous track's cover, or none: the old
+                // picture then stays until the new one arrives, so it never blinks to a placeholder or a wrong cover.
+                bool inWindow = now - keyChangedAt < ArtWindow;
+                var (bytes, hash) = props.Thumbnail != null ? await ReadThumb(props.Thumbnail) : (null, null);
+                bool oldCover = hash != null && hash == staleHash;
+                thumbMissing = hash == null;
+                if (hash == null || oldCover) { if (inWindow) retry = true; }
+                else if (hash != artHash)
+                {
+                    var img = MakeArt(bytes);
+                    if (img != null) { Art = img; artHash = hash; }
+                }
+                if (hash != null && !oldCover && hash == artHash) Remember(key, Art, hash);
+                if (!inWindow && thumbMissing && artHash != null && artHash == staleHash)
+                {
+                    Art = null; artHash = null;   // the new track really has no cover: do not leave the old one
+                }
             }
+            var sig = $"{Has}|{Switching}|{Playing}|{Title}|{Artist}|{artHash}|{CanNext}|{CanPrev}|{CanSeek}";
+            changed = sig != signature; signature = sig;
         }
-        catch (Exception ex) { Log.Write("media: " + ex.Message); }
+        catch (Exception ex) { Log.Write("media: " + ex.Message); changed = true; }
         finally { gate.Release(); }
-        Changed?.Invoke();
+        if (retry) RetrySoon();
+        if (changed) Changed?.Invoke();
+        if (sendNow != null) _ = Command(sendNow, 0, queued: true);
     }
 
-    static async Task<string> LoadArt(IRandomAccessStreamReference reference)
+    // the session may vanish and come back as a new object: look for it again, not only at the old one
+    void RetrySoon(int ms = 350)
+    {
+        if (Interlocked.Exchange(ref retryQueued, 1) == 1) return;
+        _ = Task.Delay(ms).ContinueWith(_ => { Interlocked.Exchange(ref retryQueued, 0); Recheck(); });
+    }
+
+    /// <summary>A safety net for missed events: look again at the session and what it plays.</summary>
+    public void Recheck()
+    {
+        if (manager == null) return;
+        Attach();
+    }
+
+    static async Task<(byte[] bytes, string hash)> ReadThumb(IRandomAccessStreamReference reference)
     {
         try
         {
@@ -145,7 +232,19 @@ sealed class MediaWatcher
             using var stream = ras.AsStreamForRead();
             using var ms = new MemoryStream();
             await stream.CopyToAsync(ms);
-            ms.Position = 0;
+            if (ms.Length == 0) return (null, null);
+            var bytes = ms.ToArray();
+            return (bytes, Convert.ToHexString(System.Security.Cryptography.MD5.HashData(bytes)));
+        }
+        catch { return (null, null); }
+    }
+
+    /// <summary>A square 160px JPEG of the cover, as a data URL for the page.</summary>
+    static string MakeArt(byte[] bytes)
+    {
+        try
+        {
+            using var ms = new MemoryStream(bytes);
             using var src = new Bitmap(ms);
             int side = Math.Min(src.Width, src.Height);
             var crop = new Rectangle((src.Width - side) / 2, (src.Height - side) / 2, side, side);
@@ -164,21 +263,37 @@ sealed class MediaWatcher
         catch { return null; }
     }
 
-    public async Task Command(string c, double value = 0)
+    public async Task Command(string c, double value = 0, bool queued = false)
     {
+        bool transport = c is "next" or "prev" or "play" or "pause";
+        if (transport && !queued) lastCommandAt = DateTime.Now;
         var s = session;
-        if (s == null) return;
-        try
+        bool ok = false;
+        if (s != null)
         {
-            switch (c)
+            try
             {
-                case "seek": await s.TryChangePlaybackPositionAsync((long)(value * 10_000_000)); break;
-                case "play": await s.TryTogglePlayPauseAsync(); break;
-                case "next": await s.TrySkipNextAsync(); break;
-                case "prev": await s.TrySkipPreviousAsync(); break;
-                case "pause": await s.TryPauseAsync(); break;
+                ok = c switch
+                {
+                    "seek" => await s.TryChangePlaybackPositionAsync((long)(value * 10_000_000)),
+                    "play" => await s.TryTogglePlayPauseAsync(),
+                    "next" => await s.TrySkipNextAsync(),
+                    "prev" => await s.TrySkipPreviousAsync(),
+                    "pause" => await s.TryPauseAsync(),
+                    _ => false
+                };
             }
+            catch (Exception ex) { Log.Write("media cmd: " + ex.Message); }
         }
-        catch (Exception ex) { Log.Write("media cmd: " + ex.Message); }
+        if (!transport) return;
+        if (!ok && !queued && Has)
+        {
+            // the app is between tracks and has no session to take the press: send it once the app is back
+            pendingCmd = c; pendingAt = DateTime.Now;
+            RetrySoon();
+        }
+        // the app may rebuild its session or update the track a moment later: look again a few times
+        foreach (var ms in new[] { 300, 900, 2000 })
+            _ = Task.Delay(ms).ContinueWith(_ => Recheck());
     }
 }

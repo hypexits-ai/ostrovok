@@ -482,7 +482,7 @@ sealed class IslandForm : Form
         var (pos, dur) = media.Timeline();
         Post(new
         {
-            t = "media", has = media.Has, playing = media.Playing, title = media.Title, artist = media.Artist,
+            t = "media", has = media.Has, switching = media.Switching, playing = media.Playing, title = media.Title, artist = media.Artist,
             art = media.Art, canNext = media.CanNext, canPrev = media.CanPrev, canSeek = media.CanSeek,
             app = owner.Name, browser = owner.Browser, pos = Math.Round(pos, 1), dur = Math.Round(dur, 1)
         });
@@ -695,6 +695,7 @@ sealed class IslandForm : Form
         if (tick % 2 == 0) PushSys();
         if (tick % 5 == 0) PushNet();
         if (ready) CheckCapture(true);
+        if (tick % 3 == 0) media.Recheck();   // a safety net in case an app's media events got lost
         if (tick % 5 == 0 && audio.CheckDevice()) PushVolume(audio.Level, audio.Muted, false);
         if (tick % 60 == 0) TopMost = true;
 

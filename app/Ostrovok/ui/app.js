@@ -375,6 +375,12 @@ $('#wins').addEventListener('click', e => {
 });
 
 /* ───────── media ───────── */
+// covers cross-fade (see .cover in style.css); the host keeps the old picture until the new track's one is loaded
+function setCover(el, m) {
+  const v = m.art ? `url("${m.art}")` : '';
+  if (el._art !== v) { el._art = v; el.style.backgroundImage = v; }
+}
+
 function onMedia(m) {
   const prev = S.media;
   const changedTrack = m.has && m.playing && (!prev.has || prev.title !== m.title || prev.artist !== m.artist);
@@ -396,8 +402,10 @@ function applyMedia() {
   document.body.dataset.playing = mediaShown() && m.playing ? '1' : '0';
   setB('trk', m.title || ''); setB('art', m.artist || '');
   $$('.hm-a').forEach(el => el.style.display = m.artist ? '' : 'none');
-  $$('[data-cover]').forEach(el => el.style.backgroundImage = m.art ? `url("${m.art}")` : '');
-  $('#b-next').disabled = !m.canNext;
+  $$('[data-cover]').forEach(el => setCover(el, m));
+  // the app is between tracks (Yandex Music drops its session until the next one loads): the last track pulses softly
+  document.body.classList.toggle('media-switching', !!(m.has && m.switching));
+  $('#b-next').disabled = !m.canNext; $('#b-prev').disabled = !m.canPrev;
 }
 let level = 0;
 function onLevel(v) {
@@ -677,6 +685,7 @@ island.addEventListener('click', e => {
       document.body.dataset.playing = document.body.dataset.playing === '1' ? '0' : '1';
       send({ t: 'cmd', c: 'play' }); break;
     case 'next': send({ t: 'cmd', c: 'next' }); break;
+    case 'prev': send({ t: 'cmd', c: 'prev' }); break;
     case 'wifi': case 'bt': b.classList.toggle('on'); send({ t: 'cmd', c: a }); break;
     case 'mute': send({ t: 'cmd', c: 'mute' }); break;
     case 'power':

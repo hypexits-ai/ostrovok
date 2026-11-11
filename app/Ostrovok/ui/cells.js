@@ -4,7 +4,8 @@
    a cell to the side takes its height, and it grows out from under the button that opened it. */
 
 const Cells = (() => {
-  const cellEl = $('#cell'), gCell = $('#gCell'), cc = $('#cc');
+  const cellEl = $('#cell'), gCell = $('#gCell');
+  let cc = $('#cc');
   const GAP = 16;
   const ISL = () => ({ x: innerWidth / 2 - 360, y: islandTop(), w: 720, h: 340 });
   // [width, height, side]; 0 = take the island's size on that axis
@@ -88,7 +89,10 @@ const Cells = (() => {
     geo = geometry(kind, trigger);
     for (const el of [cellEl, gCell])
       Object.assign(el.style, { left: geo.x + 'px', top: geo.y + 'px', width: geo.w + 'px', height: geo.h + 'px', transformOrigin: `${geo.ox}px ${geo.oy}px` });
-    cc.innerHTML = '';
+    // a fresh, empty container for every cell: the listeners a cell puts on it leave with it.
+    // (They used to pile up, so after a few openings one click on "next" skipped several tracks.)
+    const fresh = cc.cloneNode(false); cc.replaceWith(fresh); cc = fresh;
+    getComputedStyle(fresh).opacity;   // start it from opacity 0, so the content still fades in
     handler = (KINDS[kind])(cc, geo) || {};
     visible = true;
     Goo.need('cell', true);
@@ -318,10 +322,10 @@ const Cells = (() => {
         const m = S.media;
         $('#bp-none', root).hidden = !!m.has; $('#bp', root).hidden = !m.has;
         if (!m.has) return;
-        $('#bp-cover', root).style.backgroundImage = m.art ? `url("${m.art}")` : '';
+        setCover($('#bp-cover', root), m);
         $('#bp-title', root).textContent = m.title || '';
         $('#bp-art', root).textContent = m.artist || '';
-        $('#bp-app', root).textContent = m.app || '';
+        if (m.app) $('#bp-app', root).textContent = m.app;   // the app name can be missing for a moment while it switches tracks
         $('#bp-prev', root).disabled = !m.canPrev; $('#bp-next', root).disabled = !m.canNext;
         $('#bp-prog', root).style.visibility = m.dur > 0 ? '' : 'hidden';
         pos.disabled = !m.canSeek;

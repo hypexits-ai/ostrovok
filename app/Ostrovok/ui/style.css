@@ -27,8 +27,11 @@ body.intro .island,body.intro .goo,body.intro #hot{opacity:0}
 .app{flex:none;width:var(--s);height:var(--s);border-radius:calc(var(--s) * .24);display:grid;place-items:center;overflow:hidden}
 .app img{width:100%;height:100%;object-fit:contain;display:block}
 .app.letter{background:linear-gradient(160deg,#6d6a80,#3d3a4c);font-weight:600;font-size:calc(var(--s) * .5)}
-.cover{flex:none;background:radial-gradient(circle at 28% 26%,rgba(255,236,210,.9),transparent 42%),conic-gradient(from 210deg at 62% 62%,#ff5f8f,#7b5cff,#2ec5ff,#ffb36b,#ff5f8f);background-size:cover;background-position:center}
+.cover{flex:none;background:radial-gradient(circle at 28% 26%,rgba(255,236,210,.9),transparent 42%),conic-gradient(from 210deg at 62% 62%,#ff5f8f,#7b5cff,#2ec5ff,#ffb36b,#ff5f8f);background-size:cover;background-position:center;transition:background-image .35s ease}
 .cover.mini{width:20px;height:20px;border-radius:6px}
+/* between tracks: the last track stays and pulses until the app reports the next one */
+body.media-switching .cover,body.media-switching .hm-t,body.media-switching .bp-t{animation:sw-pulse 1.3s ease-in-out infinite}
+@keyframes sw-pulse{50%{opacity:.4}}
 body[data-media="0"] .only-media{display:none!important}
 body[data-playing="0"] .only-playing{display:none!important}
 body[data-playing="1"] .i-play,body[data-playing="0"] .i-pause{display:none}
