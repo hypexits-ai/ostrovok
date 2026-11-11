@@ -176,9 +176,35 @@ setInterval(() => {
   const limit = (S.config.idleMinutes ?? 5) * 60000;
   if (!S.idle && !S.hover && limit > 0 && Date.now() - S.lastActive > limit && !(typeof Cells !== 'undefined' && Cells.isOpen())) { S.idle = true; update(); }
 }, 5000);
-function enter() {
+// In a game (or anything full screen) the hidden pointer sweeps across the island while the camera turns.
+// There the island opens only once the pointer rests on it for a moment (a sweep never rests), and never
+// while a mouse button is held (turning the camera with a held button).
+const DWELL_PX = 8;
+let dwell = null;
+const calm = () => !!(S.game || S.fs);
+function armDwell(x, y) {
+  if (dwell) clearTimeout(dwell.t);
+  dwell = { x, y, t: setTimeout(() => { dwell = null; enter(null, true); }, S.game ? 900 : 550) };
+}
+function dropDwell() { if (dwell) { clearTimeout(dwell.t); dwell = null; } }
+document.addEventListener('pointermove', e => {
+  if (!calm() || S.hover) return;
+  if (e.buttons) { dropDwell(); return; }
+  // over the island but not waiting yet (a button was just released): start waiting from here
+  if (!dwell) { if (island.contains(e.target) || e.target === $('#hot')) armDwell(e.clientX, e.clientY); return; }
+  if (Math.hypot(e.clientX - dwell.x, e.clientY - dwell.y) > DWELL_PX) armDwell(e.clientX, e.clientY);
+}, true);
+// clicks on the closed island over a game are stray (a shot, a camera drag): they do nothing
+for (const type of ['click', 'contextmenu', 'pointerdown', 'auxclick'])
+  island.addEventListener(type, e => { if (calm() && !S.hover) { e.stopPropagation(); e.preventDefault(); } }, true);
+
+function enter(e, rested) {
   // while the Snipping Tool picks an area the island stays small, so it does not cover the tool's toolbar
   if (S.snip) return;
+  if (calm() && !S.hover && !rested && !isMessage()) {
+    if (e && !e.buttons && !dwell) armDwell(e.clientX, e.clientY);   // already waiting: keep that wait
+    return;
+  }
   clearTimeout(hovTimer);
   touchActive();
   // over a message: keep it on screen so it can be read and clicked, instead of unfolding the island
@@ -186,6 +212,7 @@ function enter() {
   if (!S.hover) { S.hover = true; update(); }
 }
 function leave(delay = 280) {
+  dropDwell();
   clearTimeout(hovTimer);
   S.lastActive = Date.now();
   if (S.evHold) { S.evHold = false; clearTimeout(evTimer); evTimer = setTimeout(() => { S.ev = null; update(); }, 1500); return; }
@@ -362,13 +389,87 @@ function onCapture(m) {
 }
 
 /* ───────── internet connection ───────── */
+// a plain icon like Windows 11 draws it: Wi-Fi with its signal (0–5 bars as up to three arcs), cable, or offline
 function onNet(m) {
-  const b = $('#b-net');
-  b.hidden = false;
-  b.querySelector('use').setAttribute('href', !m.online ? '#g-offline' : m.kind === 'wifi' ? '#g-wifi' : '#g-ethernet');
-  b.classList.toggle('off', !m.online);
-  b.title = !m.online ? 'Нет подключения к интернету' : (m.kind === 'wifi' ? 'Wi-Fi' : 'Кабель') + (m.name ? ' · ' + m.name : '') + ' — подключено';
+  const el = $('#st-net');
+  el.hidden = false;
+  if (!m.online) el.innerHTML = '<svg viewBox="0 0 24 24" stroke="#fff" stroke-width="1.6"><circle cx="11" cy="11" r="7.5"/><path d="M3.5 11h15M11 3.5c2.3 2.2 2.3 12.8 0 15M11 3.5c-2.3 2.2-2.3 12.8 0 15"/><circle cx="18" cy="18" r="3.6" fill="#000" stroke="#ff5a5f"/><path d="m15.6 20.4 4.8-4.8" stroke="#ff5a5f"/></svg>';
+  else if (m.kind === 'wifi') {
+    const lit = m.bars > 0 ? Math.max(1, Math.round(m.bars * 3 / 5)) : 3;
+    const arcs = ['M9.17 16.17A4 4 0 0 1 14.83 16.17', 'M6.34 13.34A8 8 0 0 1 17.66 13.34', 'M3.51 10.51A12 12 0 0 1 20.49 10.51'];
+    el.innerHTML = '<svg viewBox="0 0 24 24">' + arcs.map((d, i) => `<path d="${d}" stroke="${i < lit ? '#fff' : 'rgba(255,255,255,.28)'}" stroke-width="2"/>`).join('') + '<circle cx="12" cy="19" r="1.5" fill="#fff"/></svg>';
+  } else el.innerHTML = '<svg viewBox="0 0 24 24" stroke="#fff" stroke-width="1.7"><rect x="5" y="4" width="15" height="11" rx="1.6"/><path d="M12.5 15v3.5M9 18.5h7M2.5 13.5v4M2.5 17.5h3.2"/><rect x="1.4" y="10.4" width="2.2" height="3.1" rx=".5" fill="#fff"/></svg>';
+  el.title = !m.online ? 'Нет подключения к интернету' : (m.kind === 'wifi' ? 'Wi-Fi' : 'Кабель') + (m.name ? ' · ' + m.name : '');
 }
+
+/* ───────── battery (laptops) ───────── */
+// as in Windows 11, the percentage inside: outline 28×16, the fill inset 3px on every side (22×10 when full);
+// the number is drawn twice, white over the empty part and dark over the fill
+function onBattery(m) {
+  const el = $('#st-bat');
+  el.hidden = !m.has;
+  if (!m.has) return;
+  const lvl = Math.max(0, Math.min(100, m.level)), low = !m.charging && lvl <= 20, w = Math.round(22 * lvl / 100);
+  el.className = 'bat' + (m.charging ? ' charging' : '') + (low ? ' low' : '');
+  el.title = `Батарея ${lvl}%` + (m.charging ? ', от сети' : '');
+  el.innerHTML = (m.charging ? '<svg class="bolt" viewBox="0 0 9 12"><path d="M5.6 0 0 7h3.4L2.8 12 9 4.6H5.4z"/></svg>' : '')
+    + `<svg class="cell" viewBox="0 0 31 16"><defs><clipPath id="bat-clip"><rect x="3" y="3" width="${w}" height="10" rx="1.5"/></clipPath></defs>`
+    + '<rect class="outline" x=".75" y=".75" width="26.5" height="14.5" rx="4"/><path class="nub" d="M28.5 5h.8a1.2 1.2 0 0 1 1.2 1.2v3.6a1.2 1.2 0 0 1-1.2 1.2h-.8z"/>'
+    + `<rect class="lvl" x="3" y="3" width="${w}" height="10" rx="1.5"/><text class="t-out" x="14" y="8.4">${lvl}</text><text class="t-in" x="14" y="8.4" clip-path="url(#bat-clip)">${lvl}</text></svg>`;
+}
+
+/* ───────── screen brightness ───────── */
+const bright = (() => {
+  const el = $('#bright'), RAYS = 8;
+  el.innerHTML = '<svg class="sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.6"/>' + '<line/>'.repeat(RAYS) + '</svg>'
+    + '<div class="track"><div class="fill"></div></div>'
+    + '<svg class="moon" viewBox="0 0 24 24"><path d="M20 13.4A8 8 0 1 1 10.6 4a6.3 6.3 0 0 0 9.4 9.4z"/></svg>';
+  const track = $('.track', el), fill = $('.fill', el), sun = $('.sun', el);
+  let v = 50, drag = false, sentAt = 0, sendTimer = 0, touchedAt = -1e9;
+  function paint() {
+    fill.style.height = v + '%';
+    el.setAttribute('aria-valuenow', v); el.setAttribute('aria-valuetext', v + '%'); el.title = `Яркость ${v}%`;
+    const len = 1.2 + 2.6 * v / 100;   // the sun's rays grow with the brightness
+    sun.querySelectorAll('line').forEach((l, i) => {
+      const a = i * Math.PI * 2 / RAYS, r0 = 6.2;
+      l.setAttribute('x1', (12 + Math.cos(a) * r0).toFixed(2)); l.setAttribute('y1', (12 + Math.sin(a) * r0).toFixed(2));
+      l.setAttribute('x2', (12 + Math.cos(a) * (r0 + len)).toFixed(2)); l.setAttribute('y2', (12 + Math.sin(a) * (r0 + len)).toFixed(2));
+    });
+  }
+  // the monitor takes tens of milliseconds per change: send at most ~12 per second, and always the last value
+  function set(nv) {
+    nv = Math.max(0, Math.min(100, Math.round(nv)));
+    touchedAt = performance.now();
+    if (nv === v) return;
+    v = nv; paint();
+    clearTimeout(sendTimer);
+    const wait = Math.max(0, 80 - (performance.now() - sentAt));
+    sendTimer = setTimeout(() => { sentAt = performance.now(); send({ t: 'bright', v }); }, wait);
+  }
+  const fromY = y => { const r = track.getBoundingClientRect(); return (r.bottom - y) / r.height * 100; };
+  el.addEventListener('pointerdown', e => {
+    if (e.button !== 0 || e.target.closest('.sun, .moon')) return;
+    drag = true; el.classList.add('drag'); el.setPointerCapture(e.pointerId); set(fromY(e.clientY)); e.preventDefault();
+  });
+  el.addEventListener('pointermove', e => { if (drag) set(fromY(e.clientY)); });
+  ['pointerup', 'pointercancel'].forEach(n => el.addEventListener(n, () => { drag = false; el.classList.remove('drag'); }));
+  el.addEventListener('wheel', e => { e.preventDefault(); e.stopPropagation(); set(v + (e.deltaY < 0 ? 5 : -5)); }, { passive: false });
+  el.addEventListener('keydown', e => {
+    if (e.key === 'ArrowUp' || e.key === 'ArrowRight') { e.preventDefault(); set(v + 5); }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') { e.preventDefault(); set(v - 5); }
+  });
+  sun.addEventListener('click', () => set(v + 10));
+  $('.moon', el).addEventListener('click', () => set(v - 10));
+  paint();
+  return {
+    // from the host: is there a screen to dim, and its brightness (ignored right after the user moved it)
+    update(m) {
+      el.hidden = !m.ok;
+      $('.mid').classList.toggle('has-bright', !!m.ok);
+      if (m.ok && !drag && performance.now() - touchedAt > 2500) { v = m.v; paint(); }
+    }
+  };
+})();
 $('#wins').addEventListener('click', e => {
   const b = e.target.closest('[data-win]'); if (!b || suppressClick) return;
   send({ t: 'activate', id: b.dataset.win });
@@ -720,12 +821,16 @@ if (host) host.addEventListener('message', e => {
     case 'sys': S.sys = m; renderSys(); break;
     case 'vol': onVol(m); break;
     case 'radios': onRadios(m); break;
-    case 'config': S.config = m; onRadios(S.radios || {}); setMode(m.mode || 'capsule', false); if (S.config.wifi) $('#b-net').dataset.cell = 'wifi'; introStart(); break;
+    case 'config': S.config = m; onRadios(S.radios || {}); setMode(m.mode || 'capsule', false); introStart(); break;
     case 'tg': onTgMessage(m); break;
     case 'net': onNet(m); break;
+    case 'battery': onBattery(m); break;
+    case 'bright': bright.update(m); break;
+    case 'game': S.game = !!m.game; S.fs = !!m.fs; if (!calm()) dropDwell(); break;
+    case 'enter': if (!S.hover) enter({ clientX: m.x, clientY: m.y, buttons: m.held ? 1 : 0 }); break;
     case 'capture': onCapture(m); break;
     case 'tgUnread': onTgUnread(m.n); break;
-    case 'leave': if (S.hover && !busy() && !Cells.holdsFocus()) leave(120); break;
+    case 'leave': dropDwell(); if (S.hover && !busy() && !Cells.holdsFocus()) leave(120); break;
     default: Cells.onHost(m);
   }
 });

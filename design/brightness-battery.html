@@ -1,0 +1,354 @@
+<title>Островок: яркость и батарея</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Onest:wght@500;600;700&display=swap">
+<style>
+/* Layout: design-review bench — switches for device, network and slider style; the live expanded island on a desktop strip; comparison cards. Single dark look, like the island. */
+:root{
+  --bg:#0f0e14; --surface:#18171f; --surface-2:#22202c; --line:#2c2a37;
+  --fg:#eceaf3; --muted:#9a97aa; --accent:#c4b2ff;
+  --ok:#5be38f; --low:#ff5a5f;
+  --ui:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --display:'Onest','Inter',system-ui,sans-serif;
+  color-scheme:dark;
+}
+html,body{background:var(--bg);color:var(--fg)}
+body{font-family:var(--ui);-webkit-font-smoothing:antialiased}
+.page{max-width:1120px;margin:0 auto;padding-block:28px 64px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:22px}
+header h1{font-family:var(--display);font-weight:700;font-size:34px;letter-spacing:-.02em;margin:0;text-wrap:balance}
+header p{margin:8px 0 0;color:var(--muted);font-size:14.5px;line-height:1.55;max-width:70ch}
+.eyebrow{font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin-bottom:8px;font-weight:600}
+.toolbar{display:flex;flex-wrap:wrap;gap:14px 22px;align-items:flex-end}
+.grp{display:flex;flex-direction:column;gap:6px;min-width:0}
+.glbl{font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.seg{display:inline-flex;flex-wrap:wrap;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:3px;gap:2px}
+.seg button{all:unset;cursor:pointer;padding:7px 13px;border-radius:9px;color:var(--muted);font-size:13px;font-weight:500;transition:background .2s,color .2s;white-space:nowrap}
+.seg button:hover{color:var(--fg)}
+.seg button[aria-pressed="true"]{background:var(--surface-2);color:var(--fg);box-shadow:inset 0 0 0 1px rgba(255,255,255,.06)}
+.seg button:focus-visible,.bs:focus-visible,.pick:focus-visible,#bat-level:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.batctl{display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:5px 12px;font-size:13px;color:var(--muted)}
+.batctl input[type=range]{width:120px;accent-color:var(--accent)}
+.batctl b{color:var(--fg);font-weight:600;min-width:34px;font-variant-numeric:tabular-nums}
+
+/* ───────── desktop strip ───────── */
+.stage{position:relative;width:100%;max-width:100%;aspect-ratio:820/372;border-radius:16px;overflow:hidden;border:1px solid var(--line);background:#000}
+.desk{position:absolute;left:0;top:0;width:820px;height:372px;transform-origin:0 0;overflow:hidden;color:#fff;font-variant-numeric:tabular-nums;user-select:none;-webkit-user-select:none;
+  background:radial-gradient(70% 70% at 84% 10%,rgba(236,204,255,.8),transparent 60%),radial-gradient(60% 80% at 8% 92%,rgba(64,36,146,.9),transparent 65%),linear-gradient(140deg,#2b1f63 0%,#5a3fb5 45%,#a98cf5 100%)}
+.dim{position:absolute;inset:0;background:#000;pointer-events:none;z-index:9;transition:opacity .08s linear}
+.island{position:absolute;left:50px;top:8px;width:720px;height:350px;border-radius:32px;background:#000;box-shadow:0 0 0 .5px rgba(255,255,255,.08),0 18px 50px rgba(10,0,40,.45);
+  display:grid;grid-template-rows:40px minmax(0,1fr) 46px;gap:10px;padding:16px 22px;box-sizing:border-box;font-size:12px}
+.xt{display:flex;align-items:center;gap:10px}
+.clock{display:flex;flex-direction:column;line-height:1.1;flex:none}
+.clock b{font-family:var(--display);font-size:20px;font-weight:600;letter-spacing:-.01em}
+.clock span{font-size:11px;color:rgba(255,255,255,.5)}
+.hm{flex:1;min-width:0;display:flex;align-items:center;justify-content:center;gap:10px}
+.hm .cv{width:26px;height:26px;border-radius:7px;background:linear-gradient(150deg,#3a3a3a,#8a1f1f 60%,#d8d8d8);flex:none}
+.hm .t{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12.5px;max-width:190px}
+.hm .t b{font-weight:600}.hm .t span{color:rgba(255,255,255,.5)}
+.eqs{display:flex;align-items:flex-end;gap:2px;height:12px;flex:none}
+.eqs i{width:2.5px;border-radius:2px;background:linear-gradient(#ffc27a,#ff5f8f)}
+.ib{width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.1);display:grid;place-items:center;flex:none}
+.ib.sm{width:28px;height:28px;background:none}
+.ib svg,.ic{width:16px;height:16px;stroke:#fff;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.lift{display:flex;flex-direction:column;gap:2px;flex:none}
+.lift i{width:24px;height:15px;border-radius:5px;background:rgba(255,255,255,.1);display:grid;place-items:center}
+.lift i svg{width:10px;height:10px;stroke:#fff;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.lift i.on{background:rgba(255,255,255,.28)}
+
+/* status icons: plain glyphs, no button behind them */
+.status{display:flex;align-items:center;gap:9px;padding:0 4px;flex:none}
+.st-net{width:18px;height:18px;display:grid;place-items:center}
+.st-net svg{width:18px;height:18px;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.bat{position:relative;display:flex;align-items:center;gap:3px}
+.bat .bolt{width:9px;height:12px;fill:var(--ok)}
+/* drawn as one SVG on whole pixels: the fill keeps the same gap to the outline on every side */
+.bat svg.cell{width:31px;height:16px;overflow:visible}
+.bat .outline{fill:none;stroke:rgba(255,255,255,.82);stroke-width:1.5}
+.bat .nub{fill:rgba(255,255,255,.82)}
+.bat .lvl{fill:#fff;transition:width .3s}
+.bat text{font:700 9px var(--ui);letter-spacing:-.02em;text-anchor:middle;dominant-baseline:central}
+.bat .t-out{fill:#fff}.bat .t-in{fill:#000}
+.bat.charging .lvl{fill:var(--ok)}
+.bat.low .lvl{fill:var(--low)}
+.bat.low .t-in{fill:#fff}
+
+.mid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 40px;gap:16px;min-height:0}
+.cap{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.45);font-weight:600;text-align:center}
+.col{display:grid;grid-template-rows:auto minmax(0,1fr);gap:6px;min-width:0;min-height:0}
+.fav-l{position:relative;display:flex;flex-direction:column;justify-content:center;gap:16px;padding-left:34px}
+.fav-l .it{display:flex;align-items:center;gap:11px;font-size:14px;font-weight:500}
+.fav-l .it.dim{opacity:.32;transform:scale(.9);transform-origin:left center}
+.fav-l .it.cur{font-weight:600}
+.fav-l svg.arc{position:absolute;right:6px;top:0;height:100%;width:30px;overflow:visible}
+.wl{display:flex;flex-direction:column;gap:2px;width:100%;max-width:214px;margin:0 auto}
+.wrow{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:12px;font-size:13.5px;font-weight:600;min-width:0}
+.wrow span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.wrow.act{background:rgba(255,255,255,.1)}
+.app{width:26px;height:26px;border-radius:7px;display:grid;place-items:center;flex:none;font-weight:700;font-size:11px;color:#fff}
+.xb{display:flex;align-items:center;gap:10px}
+.search{width:106px;height:40px;border-radius:20px;background:rgba(255,255,255,.1);display:flex;align-items:center;gap:9px;padding:0 15px;box-sizing:border-box;color:rgba(255,255,255,.55);font-size:13px;flex:none}
+.vsep{width:1px;height:24px;background:rgba(255,255,255,.12);flex:none}
+.ib.blue{background:#2f7bff}
+.vol{flex:1;height:40px;border-radius:20px;background:rgba(255,255,255,.08);display:flex;align-items:center;gap:10px;padding:0 14px;box-sizing:border-box;min-width:0}
+.vol .bar{flex:1;height:5px;border-radius:5px;background:linear-gradient(to right,#fff 44%,rgba(255,255,255,.18) 44%);position:relative}
+.vol .bar::after{content:"";position:absolute;left:44%;top:50%;width:14px;height:14px;border-radius:50%;background:#fff;transform:translate(-50%,-50%)}
+.vol b{font-size:12px;font-weight:600;color:rgba(255,255,255,.7)}
+.gauge{display:flex;align-items:center;gap:7px;font-weight:700;font-size:13px;flex:none}
+.gauge i{width:30px;height:30px;border-radius:50%;background:conic-gradient(var(--ok) var(--p),rgba(255,255,255,.12) 0);-webkit-mask:radial-gradient(circle,transparent 11px,#000 11.5px);mask:radial-gradient(circle,transparent 11px,#000 11.5px)}
+
+/* ───────── brightness slider ───────── */
+.bs{position:relative;display:grid;grid-template-rows:20px minmax(0,1fr) 20px;justify-items:center;gap:8px;height:100%;outline:none;touch-action:none;cursor:pointer}
+.bs .sun,.bs .moon{width:18px;height:18px;fill:none;stroke:#fff;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;cursor:pointer;opacity:.9}
+.bs .moon{opacity:.6}
+.bs .track{position:relative;width:4px;height:100%;border-radius:4px;background:rgba(255,255,255,.16);transition:width .15s}
+.bs .fill{position:absolute;left:0;right:0;bottom:0;border-radius:inherit;background:#fff}
+.bs .knob{position:absolute;left:50%;width:14px;height:14px;border-radius:50%;background:#fff;box-shadow:0 1px 6px rgba(0,0,0,.5);transform:translate(-50%,50%);transition:transform .15s}
+.bs .tip{position:absolute;right:calc(100% + 10px);padding:3px 7px;border-radius:7px;background:#fff;color:#000;font-size:11px;font-weight:700;transform:translateY(50%);white-space:nowrap;opacity:0;transition:opacity .15s;pointer-events:none;font-variant-numeric:tabular-nums}
+.bs:hover .track{width:5px}
+.bs:hover .knob,.bs.drag .knob{transform:translate(-50%,50%) scale(1.15)}
+/* Variant: pill — a wide soft bar, no knob, the fill itself is the handle */
+.bs[data-v="pill"] .track{width:24px;border-radius:12px;background:rgba(255,255,255,.1);overflow:hidden}
+.bs[data-v="pill"]:hover .track{width:26px}
+.bs[data-v="pill"] .fill{border-radius:0;background:rgba(255,255,255,.92)}
+.bs[data-v="pill"] .knob{display:none}
+/* Variant: tip — the thread, plus the percentage beside the knob while you touch it */
+.bs[data-v="tip"]:hover .tip,.bs[data-v="tip"].drag .tip{opacity:1}
+
+/* ───────── cards ───────── */
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr));gap:16px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0;transition:border-color .2s}
+.card.sel{border-color:rgba(196,178,255,.55)}
+.card h2{font-family:var(--display);font-size:19px;font-weight:600;margin:0;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.card h2 small{font-family:var(--ui);font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--accent)}
+.card p{margin:0;color:var(--muted);font-size:13.5px;line-height:1.5}
+.mini{background:#000;border-radius:20px;height:210px;padding:16px 0;box-sizing:border-box;display:flex;justify-content:center;color:#fff}
+.mini .bs{width:60px}
+.pick{all:unset;cursor:pointer;align-self:flex-start;font-size:13px;font-weight:600;color:var(--fg);background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:7px 12px}
+.card.sel .pick{color:var(--accent)}
+.bat-row{background:#000;border-radius:20px;padding:22px 14px;display:grid;grid-template-columns:repeat(2,1fr);gap:18px 10px;color:#fff}
+.bat-row figure{margin:0;display:flex;flex-direction:column;align-items:center;gap:8px}
+.bat-row figcaption{font-size:11.5px;color:rgba(255,255,255,.55)}
+.bat-row .bat{transform:scale(1.5);transform-origin:center;margin:6px 0}
+.net-row{background:#000;border-radius:20px;padding:22px 14px;display:grid;grid-template-columns:repeat(3,1fr);gap:10px;color:#fff}
+.net-row figure{margin:0;display:flex;flex-direction:column;align-items:center;gap:8px}
+.net-row .st-net{transform:scale(1.4)}
+.net-row figcaption{font-size:11.5px;color:rgba(255,255,255,.55);text-align:center}
+.notes{margin:0;padding-left:18px;color:var(--muted);font-size:13.5px;line-height:1.6;max-width:80ch}
+.notes b{color:var(--fg);font-weight:600}
+@media (max-width:560px){ header h1{font-size:28px} }
+@media (prefers-reduced-motion:reduce){ .bat .fill,.dim,.bs .knob,.bs .track{transition:none} }
+</style>
+
+<div class="page">
+  <header>
+    <div class="eyebrow">Островок · раскрытый вид</div>
+    <h1>Яркость и батарея</h1>
+    <p>Справа в раскрытом островке ползунок яркости: сверху солнце, снизу полумесяц. Список открытых окон стал чуть уже, чтобы освободить место. Сверху рядом с кнопками теперь просто значки состояния: сеть и, только на ноутбуке, батарея с процентом внутри. Их не нажимают, поэтому Wi-Fi больше не дублирует кнопку снизу.</p>
+  </header>
+
+  <div class="toolbar">
+    <div class="grp"><span class="glbl" id="l-dev">Устройство</span>
+      <div class="seg" role="group" aria-labelledby="l-dev" id="seg-dev"><button type="button" data-v="laptop" aria-pressed="true">Ноутбук</button><button type="button" data-v="pc" aria-pressed="false">Компьютер</button></div></div>
+    <div class="grp"><span class="glbl" id="l-net">Сеть</span>
+      <div class="seg" role="group" aria-labelledby="l-net" id="seg-net"><button type="button" data-v="wifi" aria-pressed="true">Wi-Fi</button><button type="button" data-v="eth" aria-pressed="false">Кабель</button><button type="button" data-v="off" aria-pressed="false">Нет сети</button></div></div>
+    <div class="grp"><span class="glbl" id="l-var">Ползунок яркости</span>
+      <div class="seg" role="group" aria-labelledby="l-var" id="seg-var"><button type="button" data-v="thread" aria-pressed="true">Нить</button><button type="button" data-v="pill" aria-pressed="false">Пилюля</button><button type="button" data-v="tip" aria-pressed="false">С подсказкой</button></div></div>
+    <div class="grp" id="g-bat"><span class="glbl">Батарея</span>
+      <div class="batctl"><label for="bat-level">Заряд</label><input type="range" id="bat-level" min="1" max="100" value="78"><b id="bat-val">78%</b>
+        <div class="seg" role="group" aria-label="Зарядка" id="seg-chg" style="padding:2px"><button type="button" data-v="0" aria-pressed="true">От батареи</button><button type="button" data-v="1" aria-pressed="false">Заряжается</button></div></div></div>
+  </div>
+
+  <div class="stage" id="stage">
+    <div class="desk" id="desk">
+      <div class="island">
+        <div class="xt">
+          <div class="clock"><b id="clk">01:41</b><span id="date">четверг, 12 ноября</span></div>
+          <div class="hm"><span class="cv"></span><span class="eqs"><i style="height:6px"></i><i style="height:11px"></i><i style="height:8px"></i><i style="height:12px"></i><i style="height:5px"></i></span>
+            <span class="t"><b>Lonely Day</b><span> · System Of A Down</span></span>
+            <span class="ib sm"><svg viewBox="0 0 24 24"><path d="M6 5v14M19 6.5v11L9 12z" fill="#fff"/></svg></span>
+            <span class="ib sm"><svg viewBox="0 0 24 24"><path d="M8 5v14M16 5v14" stroke-width="2.6"/></svg></span>
+            <span class="ib sm"><svg viewBox="0 0 24 24"><path d="M18 5v14M5 6.5v11L15 12z" fill="#fff"/></svg></span></div>
+          <div class="lift"><i><svg viewBox="0 0 10 10"><path d="M2 6.5 5 3.5l3 3"/></svg></i><i class="on"><svg viewBox="0 0 10 10"><path d="M2 3.5 5 6.5l3-3"/></svg></i></div>
+          <div class="status" id="status"><span class="st-net" id="st-net"></span><span class="bat" id="st-bat"></span></div>
+          <span class="ib"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></svg></span>
+          <span class="ib"><svg viewBox="0 0 24 24"><path d="M12 3v8"/><path d="M6.3 7a8 8 0 1 0 11.4 0"/></svg></span>
+        </div>
+        <div class="mid">
+          <div class="col"><div class="cap">Избранное</div>
+            <div class="fav-l">
+              <div class="it dim"><span class="app" style="background:linear-gradient(160deg,#37bbfe,#1d93d2)">Tg</span>Telegram</div>
+              <div class="it cur"><span class="app" style="background:#1b1b1b;color:#ffd84a">Я</span>Яндекс Музыка</div>
+              <div class="it dim"><span class="app" style="background:#2b2b2b">H</span>Happ</div>
+              <svg class="arc" viewBox="0 0 30 180" preserveAspectRatio="none" aria-hidden="true"><path d="M8 18 Q26 90 8 162" stroke="rgba(255,255,255,.2)" stroke-width="1.6" fill="none"/><circle cx="14" cy="52" r="3" fill="rgba(255,255,255,.5)"/><circle cx="21" cy="90" r="5" fill="#fff"/><circle cx="14" cy="128" r="3" fill="rgba(255,255,255,.5)"/></svg>
+            </div></div>
+          <div class="col"><div class="cap">Открытые окна</div>
+            <div class="wl">
+              <div class="wrow"><span class="app" style="background:#2b2b2b">H</span><span>Happ Proxy Client</span></div>
+              <div class="wrow act"><span class="app" style="background:#d97757">Cl</span><span>Claude</span></div>
+              <div class="wrow"><span class="app" style="background:#1b1b1b;color:#ffd84a">Я</span><span>Яндекс Музыка</span></div>
+            </div></div>
+          <div class="bs" id="stage-bs" data-v="thread" tabindex="0" role="slider" aria-label="Яркость экрана" aria-valuemin="0" aria-valuemax="100"></div>
+        </div>
+        <div class="xb">
+          <span class="search"><svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>Поиск</span>
+          <span class="vsep"></span>
+          <span class="ib" id="b-wifi"><svg viewBox="0 0 24 24"><path d="M5 12.5a10 10 0 0 1 14 0M8 15.5a6 6 0 0 1 8 0"/><circle cx="12" cy="18.6" r="1.1" fill="#fff" stroke="none"/></svg></span>
+          <span class="ib blue"><svg viewBox="0 0 24 24"><path d="m7 7 10 10-5 4.5V2.5L17 7 7 17"/></svg></span>
+          <span class="ib"><svg viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="m16 9.5 5 5M21 9.5l-5 5"/></svg></span>
+          <span class="vol"><svg class="ic" viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M16 9a4 4 0 0 1 0 6"/></svg><span class="bar"></span><b>44</b></span>
+          <span class="gauge"><i style="--p:9%"></i>9%</span>
+          <span class="gauge"><i style="--p:2%"></i>2%</span>
+        </div>
+      </div>
+      <div class="dim" id="dim"></div>
+    </div>
+  </div>
+
+  <div class="cards" id="cards"></div>
+
+  <div class="cards">
+    <article class="card"><h2>Значок батареи <small>только ноутбук</small></h2>
+      <div class="bat-row" id="bat-row"></div>
+      <p>Как в Windows 11, с процентом внутри. Заряжается: зелёный и молния. Мало, 20% и меньше: красный. На компьютере без батареи значка нет.</p></article>
+    <article class="card"><h2>Значок сети <small>не кнопка</small></h2>
+      <div class="net-row" id="net-row"></div>
+      <p>Просто показывает, как вы подключены. Wi-Fi рисуется с уровнем сигнала. Включить, выключить или выбрать сеть можно кнопкой Wi-Fi внизу (на ноутбуке).</p></article>
+  </div>
+
+  <ul class="notes">
+    <li><b>Яркость</b> тянется мышью, крутится колёсиком (шаг 5%) и стрелками. Клик по солнцу прибавляет 10%, по полумесяцу убавляет. Лучи солнца удлиняются вместе с яркостью.</li>
+    <li>На ноутбуке яркость меняется у встроенного экрана. На компьютере островок попробует управлять монитором через DDC/CI. Если монитор так не умеет, ползунка не будет.</li>
+  </ul>
+</div>
+
+<script>
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const state = { dev: 'laptop', net: 'wifi', variant: 'pill', level: 78, charging: false, bright: 70 };
+
+/* ───────── icons ───────── */
+const SUN_RAYS = 8;
+function sunSvg() {
+  let rays = '';
+  for (let i = 0; i < SUN_RAYS; i++) rays += '<line class="ray"/>';
+  return `<svg class="sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.6"/>${rays}</svg>`;
+}
+// rays grow with the brightness
+function paintSun(svg, v) {
+  const len = 1.2 + 2.6 * v / 100;
+  svg.querySelectorAll('.ray').forEach((l, i) => {
+    const a = i * Math.PI * 2 / SUN_RAYS, r0 = 6.2;
+    l.setAttribute('x1', (12 + Math.cos(a) * r0).toFixed(2)); l.setAttribute('y1', (12 + Math.sin(a) * r0).toFixed(2));
+    l.setAttribute('x2', (12 + Math.cos(a) * (r0 + len)).toFixed(2)); l.setAttribute('y2', (12 + Math.sin(a) * (r0 + len)).toFixed(2));
+  });
+}
+const MOON = '<svg class="moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 13.4A8 8 0 1 1 10.6 4a6.3 6.3 0 0 0 9.4 9.4z"/></svg>';
+
+// Windows 11 style network glyphs
+function netSvg(kind, bars = 3) {
+  if (kind === 'wifi') {
+    const arcs = [[4, 'M9.17 16.17A4 4 0 0 1 14.83 16.17'], [8, 'M6.34 13.34A8 8 0 0 1 17.66 13.34'], [12, 'M3.51 10.51A12 12 0 0 1 20.49 10.51']];
+    return `<svg viewBox="0 0 24 24" aria-hidden="true">${arcs.map(([, d], i) => `<path d="${d}" stroke="${i < bars ? '#fff' : 'rgba(255,255,255,.28)'}" stroke-width="2"/>`).join('')}<circle cx="12" cy="19" r="1.5" fill="#fff"/></svg>`;
+  }
+  if (kind === 'eth') return '<svg viewBox="0 0 24 24" aria-hidden="true" stroke="#fff" stroke-width="1.7"><rect x="5" y="4" width="15" height="11" rx="1.6"/><path d="M12.5 15v3.5M9 18.5h7"/><path d="M2.5 13.5v4M2.5 17.5h3.2" /><rect x="1.4" y="10.4" width="2.2" height="3.1" rx=".5" fill="#fff"/></svg>';
+  return '<svg viewBox="0 0 24 24" aria-hidden="true" stroke="#fff" stroke-width="1.6"><circle cx="11" cy="11" r="7.5"/><path d="M3.5 11h15M11 3.5c2.3 2.2 2.3 12.8 0 15M11 3.5c-2.3 2.2-2.3 12.8 0 15"/><circle cx="18" cy="18" r="3.6" fill="#000" stroke="#ff5a5f"/><path d="m15.6 20.4 4.8-4.8" stroke="#ff5a5f"/></svg>';
+}
+// Battery as in Windows 11, the percentage inside. Outline 28×16 (stroke centred on the .75 line), fill inset 3px
+// on every side: 22×10 at full charge. The number is drawn twice, white over the empty part and dark over the fill.
+let batId = 0;
+function batHtml(level, charging) {
+  const low = !charging && level <= 20, w = Math.round(22 * level / 100), id = 'bc' + (++batId);
+  return `<span class="bat${charging ? ' charging' : ''}${low ? ' low' : ''}" title="Батарея ${level}%${charging ? ', заряжается' : ''}">`
+    + (charging ? '<svg class="bolt" viewBox="0 0 9 12" aria-hidden="true"><path d="M5.6 0 0 7h3.4L2.8 12 9 4.6H5.4z"/></svg>' : '')
+    + `<svg class="cell" viewBox="0 0 31 16" aria-hidden="true"><defs><clipPath id="${id}"><rect x="3" y="3" width="${w}" height="10" rx="1.5"/></clipPath></defs>`
+    + `<rect class="outline" x=".75" y=".75" width="26.5" height="14.5" rx="4"/><path class="nub" d="M28.5 5h.8a1.2 1.2 0 0 1 1.2 1.2v3.6a1.2 1.2 0 0 1-1.2 1.2h-.8z"/>`
+    + `<rect class="lvl" x="3" y="3" width="${w}" height="10" rx="1.5"/>`
+    + `<text class="t-out" x="14" y="8.4">${level}</text><text class="t-in" x="14" y="8.4" clip-path="url(#${id})">${level}</text></svg></span>`;
+}
+
+/* ───────── brightness slider ───────── */
+const sliders = [];
+function makeSlider(el, variant) {
+  el.dataset.v = variant;
+  el.innerHTML = sunSvg() + `<div class="track"><div class="fill"></div><div class="knob"></div><div class="tip"></div></div>` + MOON;
+  const track = $('.track', el), fill = $('.fill', el), knob = $('.knob', el), tip = $('.tip', el), sun = $('.sun', el), moon = $('.moon', el);
+  const s = { el, set(v, quiet) {
+    v = Math.max(0, Math.min(100, Math.round(v)));
+    state.bright = v;
+    sliders.forEach(o => o.paint(v));
+    $('#dim').style.opacity = ((100 - v) / 100 * .62).toFixed(3);
+  }, paint(v) {
+    fill.style.height = v + '%'; knob.style.bottom = v + '%'; tip.style.bottom = v + '%'; tip.textContent = v + '%';
+    paintSun(sun, v); el.setAttribute('aria-valuenow', v); el.setAttribute('aria-valuetext', v + '%');
+  } };
+  let drag = false;
+  const fromY = y => { const r = track.getBoundingClientRect(); return (r.bottom - y) / r.height * 100; };
+  el.addEventListener('pointerdown', e => {
+    if (e.target.closest('.sun') || e.target.closest('.moon')) return;
+    drag = true; el.classList.add('drag'); el.setPointerCapture(e.pointerId); s.set(fromY(e.clientY)); e.preventDefault();
+  });
+  el.addEventListener('pointermove', e => { if (drag) s.set(fromY(e.clientY)); });
+  ['pointerup', 'pointercancel'].forEach(n => el.addEventListener(n, () => { drag = false; el.classList.remove('drag'); }));
+  el.addEventListener('wheel', e => { e.preventDefault(); s.set(state.bright + (e.deltaY < 0 ? 5 : -5)); }, { passive: false });
+  el.addEventListener('keydown', e => {
+    if (e.key === 'ArrowUp' || e.key === 'ArrowRight') { e.preventDefault(); s.set(state.bright + 5); }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') { e.preventDefault(); s.set(state.bright - 5); }
+  });
+  sun.addEventListener('click', () => s.set(state.bright + 10));
+  moon.addEventListener('click', () => s.set(state.bright - 10));
+  sliders.push(s);
+  return s;
+}
+
+/* ───────── page wiring ───────── */
+const VARIANTS = [
+  { v: 'thread', name: 'Нить', tag: 'как на вашем наброске', text: 'Тонкая линия с белым кружком, как полоска громкости внизу островка. Занимает меньше всего места.' },
+  { v: 'pill', name: 'Пилюля', tag: 'как на телефоне', text: 'Широкая мягкая полоса без кружка: заливка сама служит ручкой. Похоже на яркость в пункте управления iPhone.' },
+  { v: 'tip', name: 'С подсказкой', tag: 'видно число', text: 'Та же нить, но при наведении и перетаскивании рядом с кружком появляется процент яркости.' }
+];
+const stageBs = makeSlider($('#stage-bs'), 'pill');
+const cards = $('#cards');
+cards.innerHTML = VARIANTS.map(x => `<article class="card" data-v="${x.v}"><h2>${x.name} <small>${x.tag}</small></h2>
+  <div class="mini"><div class="bs" tabindex="0" role="slider" aria-label="Яркость, вариант ${x.name}" aria-valuemin="0" aria-valuemax="100"></div></div>
+  <p>${x.text}</p><button class="pick" type="button" data-v="${x.v}">Показать на островке</button></article>`).join('');
+cards.querySelectorAll('.card').forEach(c => makeSlider($('.bs', c), c.dataset.v));
+
+function render() {
+  const laptop = state.dev === 'laptop';
+  $('#st-net').innerHTML = netSvg(state.net, 3);
+  $('#st-net').title = state.net === 'wifi' ? 'Wi-Fi: Home_5G' : state.net === 'eth' ? 'Подключено по кабелю' : 'Нет подключения к интернету';
+  $('#st-bat').outerHTML = laptop ? batHtml(state.level, state.charging).replace('<span class="bat', '<span id="st-bat" class="bat') : '<span class="bat" id="st-bat" hidden></span>';
+  // the Wi-Fi button below stays only where there is Wi-Fi hardware (a laptop here)
+  $('#b-wifi').hidden = !laptop;
+  $('#g-bat').hidden = !laptop;
+  $('#bat-val').textContent = state.level + '%';
+  stageBs.el.dataset.v = state.variant;
+  cards.querySelectorAll('.card[data-v]').forEach(c => c.classList.toggle('sel', c.dataset.v === state.variant));
+  const press = (seg, v) => document.querySelectorAll(`#${seg} button`).forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === v)));
+  press('seg-dev', state.dev); press('seg-net', state.net); press('seg-var', state.variant); press('seg-chg', state.charging ? '1' : '0');
+}
+const segs = { 'seg-dev': v => state.dev = v, 'seg-net': v => state.net = v, 'seg-var': v => state.variant = v, 'seg-chg': v => state.charging = v === '1' };
+Object.entries(segs).forEach(([id, fn]) => $('#' + id).addEventListener('click', e => { const b = e.target.closest('button'); if (b) { fn(b.dataset.v); render(); } }));
+$('#bat-level').addEventListener('input', e => { state.level = +e.target.value; render(); });
+cards.addEventListener('click', e => { const b = e.target.closest('.pick'); if (b) { state.variant = b.dataset.v; render(); $('#stage').scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' }); } });
+
+// reference rows
+$('#bat-row').innerHTML = [[100, false, 'Полная'], [54, false, 'От батареи'], [14, false, 'Мало заряда'], [62, true, 'Заряжается']]
+  .map(([l, c, t]) => `<figure>${batHtml(l, c)}<figcaption>${t}</figcaption></figure>`).join('');
+$('#net-row').innerHTML = [['wifi', 3, 'Wi-Fi, сильный'], ['wifi', 1, 'Wi-Fi, слабый'], ['eth', 0, 'Кабель']]
+  .map(([k, b, t]) => `<figure><span class="st-net">${netSvg(k, b)}</span><figcaption>${t}</figcaption></figure>`).join('');
+
+/* scale the 820×372 desktop strip to the stage */
+const stage = $('#stage'), desk = $('#desk');
+new ResizeObserver(() => { desk.style.transform = `scale(${stage.clientWidth / 820})`; }).observe(stage);
+function clock() {
+  const d = new Date();
+  $('#clk').textContent = d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  $('#date').textContent = d.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' });
+}
+clock(); setInterval(clock, 10000);
+render();
+stageBs.set(state.bright);
+</script>

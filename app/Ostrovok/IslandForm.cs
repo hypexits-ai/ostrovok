@@ -21,6 +21,8 @@ sealed class IslandForm : Form
 
     readonly WebView2 web;
     readonly MediaWatcher media = new();
+    readonly BrightnessHub brightness = new();
+    string batteryKey;
     readonly AudioController audio = new();
     readonly RadioController radios = new();
     readonly SysMonitor sys = new();
@@ -72,7 +74,8 @@ sealed class IslandForm : Form
         meterTimer.Tick += (_, _) => PushLevel();
         slowTimer.Tick += (_, _) => SlowTick();
         cursorTimer.Tick += (_, _) => CursorTick();
-        SystemEvents.DisplaySettingsChanged += (_, _) => BeginInvoke(Place);
+        SystemEvents.DisplaySettingsChanged += (_, _) => { brightness.Reset(); BeginInvoke(Place); };
+        SystemEvents.PowerModeChanged += (_, _) => { if (IsHandleCreated) BeginInvoke(() => PushBattery()); };
     }
 
     protected override CreateParams CreateParams
@@ -195,6 +198,7 @@ sealed class IslandForm : Form
         try { wifi = new WifiHub(); } catch (Exception ex) { Log.Write(ex); }
 
         media.Changed += () => BeginInvoke(PushMedia);
+        brightness.Changed += (ok, v) => { if (IsHandleCreated) BeginInvoke(() => Post(new { t = "bright", ok, v })); };
         media.TimelineChanged += () => BeginInvoke(PushMedia);
         radios.Changed += () => BeginInvoke(PushRadios);
         sys.Start();
@@ -231,6 +235,9 @@ sealed class IslandForm : Form
                     break;
                 case "log":
                     Log.Write("page: " + m.GetProperty("msg").GetString());
+                    break;
+                case "bright":
+                    brightness.Set(m.GetProperty("v").GetInt32());
                     break;
                 case "mode":
                     settings.Mode = m.GetProperty("mode").GetString();
@@ -380,6 +387,7 @@ sealed class IslandForm : Form
         PushFavorites();
         Post(new { t = "config", wifi = wifi?.Available ?? false, city = settings.City, idleMinutes = settings.IdleMinutes, mode = settings.Mode });
         lastWindowsKey = "";
+        gameSent = fsSent = false;   // a reloaded page starts without the game state: send it again
         PushWindows();
         PushMedia();
         PushVolume(audio.Level, audio.Muted, false);
@@ -389,6 +397,9 @@ sealed class IslandForm : Form
         lastUnread = -2;
         PollTelegram();
         PushNet();
+        PushBattery(true);
+        if (brightness.Value >= 0) Post(new { t = "bright", ok = brightness.Supported, v = brightness.Value });
+        brightness.Refresh();
         CheckCapture(true, true);
     }
 
@@ -429,6 +440,24 @@ sealed class IslandForm : Form
     bool lastRecSent, snipSeen;
     int avoidSent;
 
+    /// <summary>Laptops: battery level and whether it is plugged in. Desktops have none, and the page shows nothing.</summary>
+    void PushBattery(bool force = false)
+    {
+        try
+        {
+            var ps = SystemInformation.PowerStatus;
+            var st = ps.BatteryChargeStatus;
+            bool has = !st.HasFlag(BatteryChargeStatus.NoSystemBattery) && st != BatteryChargeStatus.Unknown;
+            int level = (int)Math.Round(Math.Clamp(ps.BatteryLifePercent, 0f, 1f) * 100);
+            bool charging = ps.PowerLineStatus == PowerLineStatus.Online;
+            var key = $"{has}|{level}|{charging}";
+            if (key == batteryKey && !force) return;
+            batteryKey = key;
+            Post(new { t = "battery", has, level, charging });
+        }
+        catch (Exception ex) { Log.Write("battery: " + ex.Message); }
+    }
+
     /// <summary>Internet: online or not, and whether over Wi-Fi or cable.</summary>
     void PushNet()
     {
@@ -437,7 +466,9 @@ sealed class IslandForm : Form
             var p = Windows.Networking.Connectivity.NetworkInformation.GetInternetConnectionProfile();
             bool online = p != null && p.GetNetworkConnectivityLevel() == Windows.Networking.Connectivity.NetworkConnectivityLevel.InternetAccess;
             string kind = p != null && p.IsWlanConnectionProfile ? "wifi" : "ethernet";
-            Post(new { t = "net", online, kind, name = p?.ProfileName });
+            int bars = 0;   // Wi-Fi signal 0–5 bars, drawn as up to three arcs
+            if (kind == "wifi") try { bars = p.GetSignalBars() ?? 0; } catch { }
+            Post(new { t = "net", online, kind, name = p?.ProfileName, bars });
         }
         catch (Exception ex) { Log.Write("net: " + ex.Message); }
     }
@@ -693,7 +724,8 @@ sealed class IslandForm : Form
         foreach (var w in watching.ToList())
             if (w != "weather" && (w != "wifi" || tick % 4 == 0) && (w != "bt" || tick % 3 == 0)) PushWatched(w, false);
         if (tick % 2 == 0) PushSys();
-        if (tick % 5 == 0) PushNet();
+        if (tick % 5 == 0) { PushNet(); PushBattery(); }
+        if (tick % 10 == 0) brightness.Refresh();   // the monitor's own buttons or Windows may have changed it
         if (ready) CheckCapture(true);
         if (tick % 3 == 0) media.Recheck();   // a safety net in case an app's media events got lost
         if (tick % 5 == 0 && audio.CheckDevice()) PushVolume(audio.Level, audio.Muted, false);
@@ -709,7 +741,18 @@ sealed class IslandForm : Form
             hiddenForFullscreen = hide;
             if (hide) Hide(); else Show();
         }
+
+        // In a game (or anything full screen) the pointer often sweeps over the island while the camera turns;
+        // the page then opens only after the pointer rests on it, and ignores clicks on the closed island.
+        bool game = false;
+        try { game = Games.InFront(); } catch (Exception ex) { Log.Write("games: " + ex.Message); }
+        if (ready && (game != gameSent || fs != fsSent))
+        {
+            gameSent = game; fsSent = fs;
+            Post(new { t = "game", game, fs });
+        }
     }
+    bool gameSent, fsSent;
 
     bool FullscreenAppInFront(out bool exclusive)
     {
@@ -727,8 +770,9 @@ sealed class IslandForm : Form
         if (!mon.Primary) return false;
         var b = mon.Bounds;
         if (r.Left > b.Left || r.Top > b.Top || r.Right < b.Right || r.Bottom < b.Bottom) return false;
-        long style = (long)Native.GetWindowLongPtr(fg, Native.GWL_STYLE);
-        return !(Native.IsZoomed(fg) && (style & Native.WS_CAPTION) == Native.WS_CAPTION);
+        // a maximized window is not full screen, even a frameless one (Claude, VS Code) whose edges reach past the screen;
+        // games and full-screen video use a plain window sized to the monitor instead
+        return !Native.IsZoomed(fg);
     }
 
     void CursorTick()
@@ -740,6 +784,12 @@ sealed class IslandForm : Form
         bool inside = regionCss.Any(r =>
             Rectangle.FromLTRB((int)(r.X * scale), (int)(r.Y * scale), (int)(r.Right * scale), (int)(r.Bottom * scale)).Contains(local));
         if (cursorInside && !inside) Post(new { t = "leave" });
+        // the page can miss the pointer arriving when it jumps there (games re-centre the cursor): tell it too
+        if (!cursorInside && inside)
+        {
+            bool held = new[] { 0x01, 0x02, 0x04 }.Any(vk => (Native.GetAsyncKeyState(vk) & 0x8000) != 0);   // a mouse button is down
+            Post(new { t = "enter", x = local.X / scale, y = local.Y / scale, held });
+        }
         cursorInside = inside;
     }
 

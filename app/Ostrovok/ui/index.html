@@ -105,7 +105,8 @@
           </div>
         </div>
         <div class="lift" title="Вид островка"><button class="lb" data-act="mode-notch" title="Вырез: прижать к краю экрана"><svg class="ic"><use href="#g-up"/></svg></button><button class="lb on" data-act="mode-capsule" title="Капсула"><svg class="ic"><use href="#g-down"/></svg></button></div>
-        <button class="ib sq net" data-act="netsettings" id="b-net" title="Интернет" hidden><svg class="ic"><use href="#g-ethernet"/></svg></button>
+        <!-- status: plain icons, not buttons (the Wi-Fi button lives in the bottom row) -->
+        <div class="status"><span class="st-net" id="st-net" hidden></span><span class="bat" id="st-bat" hidden></span></div>
         <button class="ib sq" data-act="settings" title="Параметры Windows"><svg class="ic"><use href="#g-gear"/></svg></button>
         <button class="ib sq pw-btn" data-act="power" data-cell="power" title="Выключение · правый клик — сон и перезагрузка"><svg class="ic"><use href="#g-power"/></svg><span>Выключить?</span></button>
       </div>
@@ -122,6 +123,7 @@
           <div class="cap">Открытые окна</div>
           <div class="wl-list" id="wins"></div>
         </div>
+        <div class="bs" id="bright" hidden tabindex="0" role="slider" aria-label="Яркость экрана" aria-valuemin="0" aria-valuemax="100" title="Яркость экрана"></div>
       </div>
 
       <div class="xb stg" style="--i:2">

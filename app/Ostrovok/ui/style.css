@@ -88,7 +88,6 @@ body[data-playing="0"] .eq i{animation:none;transform:scaleY(.2);height:100%}
 .ib.sq{width:34px;height:34px;border-radius:11px;background:rgba(255,255,255,.08)}
 .ib.sq:hover{background:rgba(255,255,255,.16)}
 .ib.sq .ic{width:17px;height:17px}
-.ib.sq.net.off{color:#ff6b74}
 /* elevator buttons: up = notch, down = capsule */
 .lift{display:flex;flex-direction:column;gap:2px;height:34px;justify-content:center}
 .lb{all:unset;cursor:pointer;width:26px;height:16px;border-radius:6px;display:grid;place-items:center;background:rgba(255,255,255,.08);color:rgba(255,255,255,.55);transition:background .2s,color .2s}
@@ -123,6 +122,32 @@ body[data-playing="0"] .eq i{animation:none;transform:scaleY(.2);height:100%}
 /* two equal halves: the wheel and the window list sit the same distance from their outer edges */
 .mid{grid-row:2;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:22px}
 .mid .wl{width:100%;max-width:250px;margin:0 auto}
+/* with the brightness pill on the right the window list gets a little narrower */
+.mid.has-bright{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 30px;gap:18px}
+.mid.has-bright .wl{max-width:216px}
+/* brightness: a soft pill, the white fill is the handle; a sun above that grows its rays, a crescent below */
+.bs{position:relative;display:grid;grid-template-rows:18px minmax(0,1fr) 18px;justify-items:center;gap:8px;min-height:0;padding:4px 0 2px;outline:none;touch-action:none;cursor:pointer}
+.bs .sun,.bs .moon{width:17px;height:17px;fill:none;stroke:#fff;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;cursor:pointer}
+.bs .moon{opacity:.6}
+.bs .track{position:relative;width:24px;height:100%;border-radius:12px;background:rgba(255,255,255,.1);overflow:hidden;transition:width .15s}
+.bs:hover .track,.bs.drag .track{width:26px}
+.bs .fill{position:absolute;left:0;right:0;bottom:0;background:rgba(255,255,255,.92)}
+.bs:focus-visible .track{box-shadow:0 0 0 2px rgba(255,255,255,.5)}
+/* status icons in the header: plain glyphs */
+.status{display:flex;align-items:center;gap:9px;padding:0 4px;flex:none}
+.st-net{width:18px;height:18px;display:grid;place-items:center}
+.st-net svg{width:18px;height:18px;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.bat{display:flex;align-items:center;gap:3px}
+.bat .bolt{width:9px;height:12px;fill:#5be38f}
+.bat svg.cell{width:31px;height:16px;overflow:visible}
+.bat .outline{fill:none;stroke:rgba(255,255,255,.82);stroke-width:1.5}
+.bat .nub{fill:rgba(255,255,255,.82)}
+.bat .lvl{fill:#fff}
+.bat text{font:700 9px var(--ui);letter-spacing:-.02em;text-anchor:middle;dominant-baseline:central}
+.bat .t-out{fill:#fff}.bat .t-in{fill:#000}
+.bat.charging .lvl{fill:#5be38f}
+.bat.low .lvl{fill:#ff5a5f}
+.bat.low .t-in{fill:#fff}
 .wl .cap{text-align:center}
 .xb{grid-row:3;display:flex;align-items:center;gap:10px}
 
