@@ -39,6 +39,10 @@ sealed class IslandForm : Form
     readonly System.Windows.Forms.Timer meterTimer = new() { Interval = 50 };
     readonly System.Windows.Forms.Timer slowTimer = new() { Interval = 1000 };
     readonly System.Windows.Forms.Timer cursorTimer = new() { Interval = 200 };
+    // screen recording and screenshots: a blinking red dot / a camera in the island
+    readonly CaptureWatch capture = new();
+    bool capRec, capCam;
+    DateTime camUntil;
     NotifyIcon tray;
     Native.WinEventProc fgProc;
     IntPtr fgHook, previousForeground;
@@ -385,7 +389,45 @@ sealed class IslandForm : Form
         lastUnread = -2;
         PollTelegram();
         PushNet();
+        CheckCapture(true, true);
     }
+
+    /// <summary>
+    /// The camera shows while the Snipping Tool overlay is up and a moment after any screenshot;
+    /// the red dot while something records or shares the screen.
+    /// </summary>
+    void CheckCapture(bool poll, bool force = false)
+    {
+        try
+        {
+            if (poll)
+            {
+                capture.RefreshSnipPids();
+                var (rec, shot) = capture.Poll();
+                capRec = rec;
+                if (shot) camUntil = DateTime.Now.AddSeconds(1.6);
+            }
+            bool snip = CaptureWatch.SnipOverlay();
+            if (snip)
+            {
+                camUntil = DateTime.Now.AddSeconds(1.2);
+                // the overlay opens above every window; step back in front of it so the camera is seen
+                Native.SetWindowPos(Handle, new IntPtr(-1), 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0010);
+            }
+            bool cam = DateTime.Now < camUntil;
+            // Snipping Tool bars at the top centre: the area picker (inside its full-screen overlay) or the recording controls
+            int bar = capture.TopBarBottom(Screen.PrimaryScreen.Bounds.Width);
+            int avoid = snip ? 70 : bar > 0 ? (int)Math.Ceiling(bar / scale) + 6 : 0;
+            if (cam != capCam || snip != snipSeen || avoid != avoidSent || poll && capRec != lastRecSent || force)
+            {
+                capCam = cam; snipSeen = snip; avoidSent = avoid; lastRecSent = capRec;
+                Post(new { t = "capture", rec = capRec, cam, snip, avoid });
+            }
+        }
+        catch (Exception ex) { Log.Write("capture: " + ex.Message); }
+    }
+    bool lastRecSent, snipSeen;
+    int avoidSent;
 
     /// <summary>Internet: online or not, and whether over Wi-Fi or cable.</summary>
     void PushNet()
@@ -652,6 +694,7 @@ sealed class IslandForm : Form
             if (w != "weather" && (w != "wifi" || tick % 4 == 0) && (w != "bt" || tick % 3 == 0)) PushWatched(w, false);
         if (tick % 2 == 0) PushSys();
         if (tick % 5 == 0) PushNet();
+        if (ready) CheckCapture(true);
         if (tick % 5 == 0 && audio.CheckDevice()) PushVolume(audio.Level, audio.Muted, false);
         if (tick % 60 == 0) TopMost = true;
 
@@ -690,6 +733,7 @@ sealed class IslandForm : Form
     void CursorTick()
     {
         if (!ready || !Visible) return;
+        CheckCapture(false);
         Native.GetCursorPos(out var p);
         var local = new Point(p.X - Left, p.Y - Top);
         bool inside = regionCss.Any(r =>

@@ -74,6 +74,7 @@
   <symbol id="g-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" stroke-width="2.4"/></symbol>
   <symbol id="g-gpu"viewBox="0 0 24 24"><rect x="2.5" y="6.5" width="19" height="11" rx="2"/><circle cx="9" cy="12" r="2.6"/><path d="M15 10h3.5M15 13.5h3.5M5 17.5v2M8.5 17.5v2"/></symbol>
   <symbol id="g-send" viewBox="0 0 24 24"><path d="M20.5 3.8L3.8 10.6l7 2.6 2.6 7z"/><path d="M20.5 3.8l-9.7 9.4"/></symbol>
+  <symbol id="g-camera" viewBox="0 0 24 24"><path d="M3.5 8.5A1.5 1.5 0 0 1 5 7h2.4l1.5-2.2h6.2L16.6 7H19a1.5 1.5 0 0 1 1.5 1.5v9A1.5 1.5 0 0 1 19 19H5a1.5 1.5 0 0 1-1.5-1.5z"/><circle cx="12" cy="12.8" r="3.5"/></symbol>
   <symbol id="g-timer" viewBox="0 0 24 24"><circle cx="12" cy="13.5" r="7.5"/><path d="M12 13.5V9.5M9.5 2.5h5"/></symbol>
 </svg>
 
@@ -87,7 +88,7 @@
     <div class="layer l-col" id="col">
       <div class="cl-left"><div class="cover mini only-media" data-cover></div><span class="cl-apps" id="c-apps"></span></div>
       <div class="cl-mid"><span data-b="time" id="c-time"></span><span class="timer-chip" id="c-timer" hidden><svg class="ic"><use href="#g-timer"/></svg><b></b></span></div>
-      <div class="cl-right"><span class="tg-badge" id="c-tg" title="Непрочитанные в Telegram" hidden><svg class="ic"><use href="#g-send"/></svg><b></b></span><span class="eq only-playing"><i></i><i></i><i></i><i></i><i></i></span><span class="tchip" id="c-gpu" hidden><svg class="ic"><use href="#g-gpu"/></svg><b data-b="gpu-pct"></b></span><span class="tchip"><svg class="ic" id="c-ic"><use href="#g-therm"/></svg><b data-b="chip"></b></span></div>
+      <div class="cl-right"><span class="tg-badge" id="c-tg" title="Непрочитанные в Telegram" hidden><svg class="ic"><use href="#g-send"/></svg><b></b></span><span class="eq only-playing"><i></i><i></i><i></i><i></i><i></i></span><span class="capi" hidden title="Идёт запись экрана"><i class="rec-dot"></i><svg class="ic cam"><use href="#g-camera"/></svg></span><span class="tchip" id="c-gpu" hidden><svg class="ic"><use href="#g-gpu"/></svg><b data-b="gpu-pct"></b></span><span class="tchip"><svg class="ic" id="c-ic"><use href="#g-therm"/></svg><b data-b="chip"></b></span></div>
     </div>
 
     <div class="layer l-exp" id="exp">
@@ -148,6 +149,7 @@
     <div class="layer l-mini" id="mini">
       <span class="eq only-playing"><i></i><i></i><i></i><i></i><i></i></span>
       <span class="m-time"><span data-b="time" class="m-clock"></span><span class="timer-chip m-timer" hidden><svg class="ic"><use href="#g-timer"/></svg><b></b></span></span>
+      <span class="capi m-cap" hidden><i class="rec-dot"></i><svg class="ic cam"><use href="#g-camera"/></svg></span>
       <span class="mchip m-cpu"><svg class="ic"><use href="#g-cpu"/></svg><b data-b="cpu-pct"></b></span>
       <span class="mchip m-gpu" hidden><svg class="ic"><use href="#g-gpu"/></svg><b data-b="gpu-pct"></b></span>
     </div>

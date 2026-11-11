@@ -1,5 +1,6 @@
 # Builds a ready-to-share archive: dist\Ostrovok-<version>-win-x64.zip
-# Inside: app\ (the program, self-contained - no .NET needed on the target PC), Install.cmd, Uninstall.cmd, README.txt.
+# Inside: app\ (the program, self-contained - no .NET needed on the target PC), Install.cmd, Uninstall.cmd, README.txt
+# and the text guides from app\release (*.txt, e.g. which Windows settings to turn on).
 # Usage: powershell -ExecutionPolicy Bypass -File app\pack.ps1
 # (ASCII only on purpose: Windows PowerShell 5.1 misreads UTF-8 scripts without a BOM.)
 $ErrorActionPreference = 'Stop'
@@ -34,6 +35,11 @@ foreach ($cmd in 'Install.cmd', 'Uninstall.cmd') {
 # README as UTF-8 with BOM so Notepad shows the Russian text correctly everywhere
 $readme = Get-Content (Join-Path $root 'README.md') -Raw -Encoding UTF8
 [IO.File]::WriteAllText((Join-Path $stage 'README.txt'), $readme, (New-Object Text.UTF8Encoding $true))
+# text guides: UTF-8 with BOM and CRLF, so any Notepad opens them right
+Get-ChildItem $rel -Filter *.txt | ForEach-Object {
+    $text = (Get-Content $_.FullName -Raw -Encoding UTF8) -replace "`r?`n", "`r`n"
+    [IO.File]::WriteAllText((Join-Path $stage $_.Name), $text, (New-Object Text.UTF8Encoding $true))
+}
 
 New-Item -ItemType Directory -Force $dist | Out-Null
 $zip = Join-Path $dist "$name.zip"

@@ -67,6 +67,16 @@ body[data-playing="0"] .eq i{animation:none;transform:scaleY(.2);height:100%}
 .ev-msg .tg-mark .ic,.ev-tg .tg-mark .ic{width:14px;height:14px;stroke-width:2.2}
 .ev-msg em{font-style:normal;font-size:11px;color:rgba(255,255,255,.45);margin-left:6px;font-weight:500}
 .tchip{display:inline-flex;align-items:center;gap:3px;font-weight:600;font-size:12.5px}
+/* screen capture: a blinking red dot while recording, a camera while taking a screenshot */
+.capi{display:inline-flex;align-items:center;gap:7px;animation:cap-in .35s cubic-bezier(.3,1.6,.5,1)}
+.capi .rec-dot{width:9px;height:9px;border-radius:50%;background:#ff3b30;box-shadow:0 0 7px rgba(255,59,48,.85);animation:rec-blink 1.1s ease-in-out infinite}
+.capi .cam{width:15px;height:15px;color:#fff;stroke-width:1.9;animation:cam-flash .6s ease-out}
+.capi:not(.rec) .rec-dot,.capi:not(.cam) .cam{display:none}
+.l-mini .capi .cam{width:13px;height:13px}
+.l-mini .capi .rec-dot{width:8px;height:8px}
+@keyframes rec-blink{50%{opacity:.22;box-shadow:none}}
+@keyframes cam-flash{0%{color:#fff;filter:drop-shadow(0 0 6px #fff)}100%{filter:none}}
+@keyframes cap-in{0%{transform:scale(.3);opacity:0}100%{transform:scale(1);opacity:1}}
 .tchip .ic{width:14px;height:14px;color:#fff;stroke-width:2}
 
 .ib{all:unset;cursor:pointer;display:grid;place-items:center;border-radius:50%;color:#fff;transition:background .2s,transform .15s,box-shadow .2s}
@@ -214,7 +224,8 @@ body.goo-on .island{background:transparent;box-shadow:none}
 .blob{position:absolute;background:#000}
 #gMain{left:50%;top:-80px;transform:translateX(-50%)}
 /* notch mode: the island hangs from the screen edge; inverse "ears" blend it in */
-.island::before,.island::after,#gMain::before,#gMain::after{content:"";position:absolute;top:0;width:var(--ear,0px);height:var(--ear,0px);pointer-events:none}
+/* the ears reach 1px into the island, so no seam shows where the two meet while the width animates */
+.island::before,.island::after,#gMain::before,#gMain::after{content:"";position:absolute;top:0;width:calc(var(--ear,0px) + 1px);height:var(--ear,0px);pointer-events:none}
 .island::before,#gMain::before{left:calc(-1 * var(--ear,0px));background:radial-gradient(circle at 0 100%,transparent calc(var(--ear,0px) - .5px),#000 var(--ear,0px))}
 .island::after,#gMain::after{right:calc(-1 * var(--ear,0px));background:radial-gradient(circle at 100% 100%,transparent calc(var(--ear,0px) - .5px),#000 var(--ear,0px))}
 body.goo-on .island::before,body.goo-on .island::after{display:none}

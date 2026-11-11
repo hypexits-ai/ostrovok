@@ -73,7 +73,8 @@ const cur = { w: 280, h: 36, r: 18, top: 8, tr: 1 }, vel = { w: 0, h: 0, r: 0, t
 let tgt = { ...cur }, spring = { k: 260, c: 26 }, running = false, last = 0;
 const SHAPE_SPRING = { k: 230, c: 17 };   // a touch of jelly when switching capsule <-> notch
 // while S.intro is set the island waits above the screen edge; it slides in once the saved mode is known
-const islandTop = () => (S.intro ? -70 : S.mode === 'notch' ? 0 : 8);
+// a Snipping Tool bar at the top centre (area picker, recording controls): the island steps down below it
+const islandTop = () => (S.intro ? -70 : S.avoid ? S.avoid : S.mode === 'notch' ? 0 : 8);
 const INTRO_SPRING = { k: 70, c: 10.5 };   // the first appearance: slower, soft, with a small bounce
 let introAnim = false;
 let introPending = false;
@@ -105,7 +106,8 @@ function update(snap) {
   const cw = collapsedWidth(), mw = miniWidth();
   exp.style.width = EXP[0] + 'px'; exp.style.height = EXP[1] + 'px';
   const d = vs === 'expanded' ? EXP : vs === 'event' ? [EVT[S.ev.kind][0], EVT[S.ev.kind][1], 38] : vs === 'mini' ? [mw, 28, 14] : [cw, 36, 18];
-  tgt = { w: d[0], h: d[1], r: d[2], top: islandTop(), tr: S.mode === 'notch' ? 0 : 1 };
+  // an even width keeps both edges on whole pixels (the island is centred); on a half pixel the notch ears showed a light seam
+  tgt = { w: Math.ceil(d[0] / 2) * 2, h: d[1], r: d[2], top: islandTop(), tr: S.mode === 'notch' && !S.avoid ? 0 : 1 };
   spring = tgt.h > cur.h + 1 ? { k: 250, c: 25 } : { k: 420, c: 38 };
   $('#hot').style.width = (vs === 'mini' ? mw : cw) + 'px';
   if (snap || reduce) { Object.assign(cur, tgt); for (const k in vel) vel[k] = 0; apply(); }
@@ -136,7 +138,9 @@ function postRect() {
   else {
     let W = Math.max(cur.w, tgt.w) + 28; const H = Math.max(cur.h, tgt.h);   // +28: room for the notch ears
     if (S.intro || introAnim) W = Math.max(W, 760);   // at start-up the host is busy and applies regions late: leave room to grow
-    rects = [{ x: Math.floor((innerWidth - W) / 2 - 6), y: 0, w: Math.ceil(W + 12), h: Math.ceil(Math.max(0, cur.top, tgt.top) + H + 8) }];   // never empty: an empty region keeps the window from being drawn for a while
+    // stepped down under a Snipping Tool bar: leave the strip above free, so the bar takes the clicks
+    const y0 = S.avoid ? Math.max(0, Math.floor(Math.min(cur.top, tgt.top))) : 0;
+    rects = [{ x: Math.floor((innerWidth - W) / 2 - 6), y: y0, w: Math.ceil(W + 12), h: Math.ceil(Math.max(0, cur.top, tgt.top) + H + 8) - y0 }];   // never empty: an empty region keeps the window from being drawn for a while
     const c = typeof Cells !== 'undefined' ? Cells.rect() : null;
     if (c) rects.push(c);
   }
@@ -173,6 +177,8 @@ setInterval(() => {
   if (!S.idle && !S.hover && limit > 0 && Date.now() - S.lastActive > limit && !(typeof Cells !== 'undefined' && Cells.isOpen())) { S.idle = true; update(); }
 }, 5000);
 function enter() {
+  // while the Snipping Tool picks an area the island stays small, so it does not cover the tool's toolbar
+  if (S.snip) return;
   clearTimeout(hovTimer);
   touchActive();
   // over a message: keep it on screen so it can be read and clicked, instead of unfolding the island
@@ -339,6 +345,19 @@ function renderWins() {
     icons.push(appIcon(w.icon, w.name, 18)); if (icons.length === 3) break;
   }
   $('#c-apps').innerHTML = icons.join('');
+  update();
+}
+
+/* ───────── screen capture ───────── */
+function onCapture(m) {
+  S.snip = !!m.snip; S.avoid = m.avoid || 0;
+  if (S.snip && S.hover) { S.hover = false; if (Cells.isOpen()) Cells.close(); }
+  const on = !!(m.rec || m.cam);
+  $$('.capi').forEach(el => {
+    el.hidden = !on;
+    el.classList.toggle('rec', !!m.rec); el.classList.toggle('cam', !!m.cam);
+    el.title = m.rec ? 'Идёт запись экрана' : 'Снимок экрана';
+  });
   update();
 }
 
@@ -695,6 +714,7 @@ if (host) host.addEventListener('message', e => {
     case 'config': S.config = m; onRadios(S.radios || {}); setMode(m.mode || 'capsule', false); if (S.config.wifi) $('#b-net').dataset.cell = 'wifi'; introStart(); break;
     case 'tg': onTgMessage(m); break;
     case 'net': onNet(m); break;
+    case 'capture': onCapture(m); break;
     case 'tgUnread': onTgUnread(m.n); break;
     case 'leave': if (S.hover && !busy() && !Cells.holdsFocus()) leave(120); break;
     default: Cells.onHost(m);
