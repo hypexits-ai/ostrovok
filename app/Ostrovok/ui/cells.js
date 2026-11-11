@@ -6,7 +6,7 @@
 const Cells = (() => {
   const cellEl = $('#cell'), gCell = $('#gCell'), cc = $('#cc');
   const GAP = 16;
-  const ISL = () => ({ x: innerWidth / 2 - 360, y: 8, w: 720, h: 340 });
+  const ISL = () => ({ x: innerWidth / 2 - 360, y: islandTop(), w: 720, h: 340 });
   // [width, height, side]; 0 = take the island's size on that axis
   const SIZES = {
     search: [720, 360, 'below'], cal: [520, 0, 'left'], player: [720, 200, 'below'], favs: [320, 0, 'left'],
@@ -619,5 +619,6 @@ const Cells = (() => {
 /* ───────── start ───────── */
 clock();
 renderSys();
-update(true);
+update(true);            // starts hidden above the screen edge (S.intro)
 send({ t: 'ready' });
+setTimeout(introStart, 2500);   // in case the settings never arrive

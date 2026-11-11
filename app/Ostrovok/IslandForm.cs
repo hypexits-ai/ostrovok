@@ -195,7 +195,7 @@ sealed class IslandForm : Form
         radios.Changed += () => BeginInvoke(PushRadios);
         sys.Start();
         _ = InitAsync();
-        BeginInvoke(async () => { await Task.Delay(2500); search.EnsureApps(); });
+        BeginInvoke(async () => { await Task.Delay(6000); search.EnsureApps(); });   // after the start-up slide: indexing holds this thread
 
         fgProc = (_, _, _, _, _, _, _) => BeginInvoke(PushWindows);
         fgHook = Native.SetWinEventHook(Native.EVENT_SYSTEM_FOREGROUND, Native.EVENT_SYSTEM_FOREGROUND, IntPtr.Zero, fgProc, 0, 0, Native.WINEVENT_OUTOFCONTEXT);
@@ -227,6 +227,10 @@ sealed class IslandForm : Form
                     break;
                 case "log":
                     Log.Write("page: " + m.GetProperty("msg").GetString());
+                    break;
+                case "mode":
+                    settings.Mode = m.GetProperty("mode").GetString();
+                    settings.Save();
                     break;
                 case "tg.open":
                     telegram.Open();
@@ -370,7 +374,7 @@ sealed class IslandForm : Form
     {
         favorites = Favorites.Load();
         PushFavorites();
-        Post(new { t = "config", wifi = wifi?.Available ?? false, city = settings.City, idleMinutes = settings.IdleMinutes });
+        Post(new { t = "config", wifi = wifi?.Available ?? false, city = settings.City, idleMinutes = settings.IdleMinutes, mode = settings.Mode });
         lastWindowsKey = "";
         PushWindows();
         PushMedia();
@@ -651,17 +655,26 @@ sealed class IslandForm : Form
         if (tick % 5 == 0 && audio.CheckDevice()) PushVolume(audio.Level, audio.Muted, false);
         if (tick % 60 == 0) TopMost = true;
 
-        bool fs = FullscreenAppInFront();
-        if (fs != hiddenForFullscreen)
+        // Over borderless/windowed-fullscreen games and videos the island stays on top (re-asserted every
+        // second, games like to grab the top). Exclusive full screen (D3D) cannot be drawn over: there it hides.
+        bool fs = FullscreenAppInFront(out bool exclusive);
+        bool hide = settings.OverFullscreen ? exclusive : fs;
+        if (fs && !hide) Native.SetWindowPos(Handle, new IntPtr(-1), 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0010);
+        if (hide != hiddenForFullscreen)
         {
-            hiddenForFullscreen = fs;
-            if (fs) Hide(); else Show();
+            hiddenForFullscreen = hide;
+            if (hide) Hide(); else Show();
         }
     }
 
-    bool FullscreenAppInFront()
+    bool FullscreenAppInFront(out bool exclusive)
     {
-        if (Native.SHQueryUserNotificationState(out int state) == 0 && state is 3 or 4) return true; // D3D full screen, presentation mode
+        exclusive = false;
+        if (Native.SHQueryUserNotificationState(out int state) == 0)
+        {
+            if (state == 3) { exclusive = true; return true; }   // exclusive Direct3D full screen
+            if (state == 4) return true;                          // presentation mode
+        }
         var fg = Native.GetForegroundWindow();
         if (fg == IntPtr.Zero || fg == Handle) return false;
         if (Native.ClassName(fg) is "Progman" or "WorkerW" or "Shell_TrayWnd") return false;
@@ -693,6 +706,9 @@ sealed class IslandForm : Form
         menu.Items.Add(new ToolStripMenuItem("Островок") { Enabled = false });
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(auto);
+        var over = new ToolStripMenuItem("Поверх полноэкранных игр и видео") { Checked = settings.OverFullscreen, CheckOnClick = true };
+        over.CheckedChanged += (_, _) => { settings.OverFullscreen = over.Checked; settings.Save(); };
+        menu.Items.Add(over);
         menu.Items.Add("Обновить избранное", null, (_, _) => { if (ready) PushAll(); });
         menu.Items.Add("Папка настроек", null, (_, _) => { Directory.CreateDirectory(Log.Dir); Shell.Open(Log.Dir); });
         menu.Items.Add("Перезапустить", null, (_, _) => { Process.Start(Application.ExecutablePath); ExitApp(); });

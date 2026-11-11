@@ -18,7 +18,7 @@ const gMain = $('#gMain'), gTrash = $('#gTrash'), trash = $('#trash'), ghost = $
 const EXP = [720, 340, 44];
 const EVT = { vol: [340, 56], batt: [410, 80], track: [430, 72], timer: [360, 72], msg: [460, 84], tg: [330, 60] };
 const S = {
-  hover: false, ev: null, mediaDismissed: false, trashSplit: false,
+  hover: false, ev: null, mediaDismissed: false, trashSplit: false, mode: 'capsule', intro: true,
   media: { has: false, playing: false }, favs: [], wins: [],
   sys: { temp: null, load: 0, batt: null, charging: true }, vol: { v: .5, mute: false }, battWarned: false,
   config: { wifi: false, city: null },
@@ -55,20 +55,45 @@ const Goo = {
       if (!this.users.size) this.timer = setTimeout(() => { if (!this.users.size) document.body.classList.remove('goo-on'); postRect(); }, 650);
     }
     postRect();
+  },
+  // the island folded while something was still merging back: drop the goo at once,
+  // otherwise the leftover blobs show up as black shapes under the small island
+  reset() {
+    clearTimeout(this.timer);
+    this.users.clear();
+    S.trashSplit = false;
+    document.body.classList.remove('goo-on', 'split');
   }
 };
 
-/* ───────── island size (spring) ───────── */
-const cur = { w: 280, h: 36, r: 18 }, vel = { w: 0, h: 0, r: 0 };
+/* ───────── island size and shape (springs) ─────────
+   w/h/r: size and corner radius; top: distance from the screen edge (8 capsule, 0 notch);
+   tr: how round the top corners are (1 capsule, 0 notch). */
+const cur = { w: 280, h: 36, r: 18, top: 8, tr: 1 }, vel = { w: 0, h: 0, r: 0, top: 0, tr: 0 };
 let tgt = { ...cur }, spring = { k: 260, c: 26 }, running = false, last = 0;
+const SHAPE_SPRING = { k: 230, c: 17 };   // a touch of jelly when switching capsule <-> notch
+// while S.intro is set the island waits above the screen edge; it slides in once the saved mode is known
+const islandTop = () => (S.intro ? -70 : S.mode === 'notch' ? 0 : 8);
+const INTRO_SPRING = { k: 70, c: 10.5 };   // the first appearance: slower, soft, with a small bounce
+let introAnim = false;
+let introPending = false;
+function introStart() {
+  if (!S.intro || introPending) return;
+  introPending = true;
+  setTimeout(() => {
+    // the slow spring is switched on in the same moment the target moves, so nothing else can rush it
+    introAnim = true; vel.top = 0;
+    S.intro = false;
+    document.body.classList.remove('intro');
+    update();
+    setTimeout(() => { introAnim = false; postRect(); }, 1800);
+  }, 150);
+}
 
 function mediaShown() { return !!S.media.has && !S.mediaDismissed; }
-// sized from its contents: the wider side fits exactly, the narrower one is centred in its half,
-// so both groups end up the same distance from the time
-function collapsedWidth() {
-  const L = $('#col .cl-left').offsetWidth, R = $('#col .cl-right').offsetWidth, T = $('#col .cl-mid').offsetWidth;
-  return Math.max(200, Math.ceil(28 + 28 + T + 2 * Math.max(L, R)));
-}
+// sized from its contents: app icons hug the left edge, CPU/GPU hug the right edge,
+// and the time sits with the same gap to both groups
+function collapsedWidth() { return Math.max(160, Math.ceil(col.offsetWidth)); }
 function visual() { if (S.hover) return 'expanded'; if (S.ev) return 'event'; if (S.idle) return 'mini'; return 'collapsed'; }
 // the mini layer sizes itself to its content (time, equalizer, CPU, GPU); the island follows it
 function miniWidth() { return Math.max(96, Math.ceil($('#mini').offsetWidth)); }
@@ -76,23 +101,31 @@ function miniWidth() { return Math.max(96, Math.ceil($('#mini').offsetWidth)); }
 function update(snap) {
   const vs = visual();
   island.dataset.state = vs;
+  if (vs !== 'expanded' && document.body.classList.contains('goo-on') && !(typeof Cells !== 'undefined' && Cells.isOpen())) Goo.reset();
   const cw = collapsedWidth(), mw = miniWidth();
-  col.style.width = cw + 'px';
   exp.style.width = EXP[0] + 'px'; exp.style.height = EXP[1] + 'px';
   const d = vs === 'expanded' ? EXP : vs === 'event' ? [EVT[S.ev.kind][0], EVT[S.ev.kind][1], 38] : vs === 'mini' ? [mw, 28, 14] : [cw, 36, 18];
-  tgt = { w: d[0], h: d[1], r: d[2] };
+  tgt = { w: d[0], h: d[1], r: d[2], top: islandTop(), tr: S.mode === 'notch' ? 0 : 1 };
   spring = tgt.h > cur.h + 1 ? { k: 250, c: 25 } : { k: 420, c: 38 };
   $('#hot').style.width = (vs === 'mini' ? mw : cw) + 'px';
-  if (snap || reduce) { Object.assign(cur, tgt); vel.w = vel.h = vel.r = 0; apply(); }
+  if (snap || reduce) { Object.assign(cur, tgt); for (const k in vel) vel[k] = 0; apply(); }
   kick();
 }
 
 function apply() {
-  const h = Math.max(1, cur.h), r = Math.max(0, Math.min(cur.r, h / 2));
-  island.style.width = Math.max(1, cur.w).toFixed(2) + 'px';
-  island.style.height = h.toFixed(2) + 'px';
-  island.style.borderRadius = r.toFixed(2) + 'px';
-  gMain.style.width = island.style.width; gMain.style.height = island.style.height; gMain.style.borderRadius = island.style.borderRadius;
+  const h = Math.max(1, cur.h), r = Math.max(0, Math.min(cur.r, h / 2)), rt = r * Math.max(0, Math.min(1, cur.tr));
+  const radius = `${rt.toFixed(2)}px ${rt.toFixed(2)}px ${r.toFixed(2)}px ${r.toFixed(2)}px`;
+  const top = cur.top.toFixed(2) + 'px';
+  for (const el of [island, gMain]) {
+    el.style.width = Math.max(1, cur.w).toFixed(2) + 'px';
+    el.style.height = h.toFixed(2) + 'px';
+    el.style.borderRadius = radius;
+    el.style.top = top;
+  }
+  // notch "ears": inverse corners that blend the island into the screen edge
+  const ear = Math.max(0, 1 - cur.tr) * Math.min(12, h / 3);
+  document.documentElement.style.setProperty('--ear', ear.toFixed(2) + 'px');
+  document.documentElement.style.setProperty('--it', top);
   postRect();
 }
 
@@ -101,8 +134,9 @@ function postRect() {
   let rects;
   if ((drag && drag.active) || S.trashSplit) rects = [{ x: 0, y: 0, w: innerWidth, h: innerHeight }];
   else {
-    const W = Math.max(cur.w, tgt.w), H = Math.max(cur.h, tgt.h);
-    rects = [{ x: Math.floor((innerWidth - W) / 2 - 6), y: 0, w: Math.ceil(W + 12), h: Math.ceil(8 + H + 8) }];
+    let W = Math.max(cur.w, tgt.w) + 28; const H = Math.max(cur.h, tgt.h);   // +28: room for the notch ears
+    if (S.intro || introAnim) W = Math.max(W, 760);   // at start-up the host is busy and applies regions late: leave room to grow
+    rects = [{ x: Math.floor((innerWidth - W) / 2 - 6), y: 0, w: Math.ceil(W + 12), h: Math.ceil(Math.max(0, cur.top, tgt.top) + H + 8) }];   // never empty: an empty region keeps the window from being drawn for a while
     const c = typeof Cells !== 'undefined' ? Cells.rect() : null;
     if (c) rects.push(c);
   }
@@ -114,10 +148,12 @@ function kick() { if (!running) { running = true; last = performance.now(); requ
 function loop(t) {
   const dt = Math.min(.034, Math.max(0, (t - last) / 1000)); last = t;
   let moving = false; const n = 4, h = dt / n;
-  for (const k of ['w', 'h', 'r']) {
+  for (const k of ['w', 'h', 'r', 'top', 'tr']) {
+    const sp = k === 'top' && introAnim ? INTRO_SPRING : k === 'top' || k === 'tr' ? SHAPE_SPRING : spring;
     let x = cur[k], v = vel[k]; const T = tgt[k];
-    if (Math.abs(x - T) < .05 && Math.abs(v) < .05) { if (x !== T) { cur[k] = T; moving = true; } vel[k] = 0; continue; }
-    for (let i = 0; i < n; i++) { const a = -spring.k * (x - T) - spring.c * v; v += a * h; x += v * h; }
+    const eps = k === 'tr' ? .002 : .05;
+    if (Math.abs(x - T) < eps && Math.abs(v) < eps) { if (x !== T) { cur[k] = T; moving = true; } vel[k] = 0; continue; }
+    for (let i = 0; i < n; i++) { const a = -sp.k * (x - T) - sp.c * v; v += a * h; x += v * h; }
     cur[k] = x; vel[k] = v; moving = true;
   }
   if (moving) apply(); else postRect();
@@ -208,11 +244,23 @@ const wheel = {
     });
   }
 };
-wheel.root.addEventListener('wheel', e => {
+// the whole left half listens, so the wheel turns wherever the pointer is over it.
+// One mouse-wheel notch = exactly one app; touchpads accumulate small deltas. The drum then eases
+// (magnet-like) onto that app.
+let wheelLastAt = 0;
+$('.mid .wcol').addEventListener('wheel', e => {
   e.preventDefault(); if (!wheel.n) return;
   const d = Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
-  const step = e.deltaMode === 1 ? 3 : 50; wheel.acc += d;
-  while (Math.abs(wheel.acc) >= step) { const s = Math.sign(wheel.acc); wheel.target += s; wheel.acc -= s * step; }
+  if (!d) return;
+  const now = performance.now();
+  if (e.deltaMode === 1 || Math.abs(d) >= 40) {
+    if (now - wheelLastAt < 70) return;            // one notch can arrive as two quick events
+    wheelLastAt = now; wheel.acc = 0;
+    wheel.target = Math.round(wheel.target) + Math.sign(d);
+  } else {
+    wheel.acc += d;
+    if (Math.abs(wheel.acc) >= 90) { wheel.target = Math.round(wheel.target) + Math.sign(wheel.acc); wheel.acc = 0; }
+  }
   kick();
 }, { passive: false });
 wheel.root.addEventListener('pointerdown', e => { if (e.button === 0) wheel.drag = { y: e.clientY, acc: 0, moved: false, id: e.pointerId }; });
@@ -311,7 +359,7 @@ function renderSys() {
     setB('gpu-main', gpu + '%'); setB('gpu-pct', gpu + '%');
     $('#gpu-ring').style.strokeDashoffset = (163.4 * (1 - Math.min(100, gpu) / 100)).toFixed(1);
   }
-  if (S.idle) update();
+  update();
   const b = S.sys.batt;
   if (b !== null && b !== undefined) {
     if (!S.sys.charging && b <= 15 && !S.battWarned) { S.battWarned = true; showEvent({ kind: 'batt', pct: b }); }
@@ -451,7 +499,7 @@ function splitTrash(on) {
   else { document.body.classList.remove('split'); setHot(false, 0); Goo.need('trash', false); }
   postRect();
 }
-function trashRect() { return { x: innerWidth / 2 + 378, y: 135, w: 86, h: 86 }; }
+function trashRect() { return { x: innerWidth / 2 + 378, y: islandTop() + 127, w: 86, h: 86 }; }
 function setHot(on, heat) {
   trash.style.setProperty('--heat', heat.toFixed(2));
   if (on === hot) return;
@@ -534,6 +582,23 @@ document.addEventListener('pointerup', endDrag);
 document.addEventListener('pointercancel', endDrag);
 
 /* ───────── buttons, right clicks ───────── */
+/* Left click = do it (toggle, open, shut down…); right click = show the menu behind it. */
+let powerTimer = 0;
+function armPower(b, on) {
+  clearTimeout(powerTimer);
+  b.classList.toggle('armed', on);
+  b.title = on ? 'Нажмите ещё раз, чтобы выключить компьютер' : 'Выключение · правый клик — сон и перезагрузка';
+  if (on) powerTimer = setTimeout(() => armPower(b, false), 3000);
+}
+function setMode(mode, save) {
+  if (mode !== 'notch' && mode !== 'capsule') return;
+  S.mode = mode;
+  document.body.classList.toggle('notch', mode === 'notch');
+  $$('[data-act^="mode-"]').forEach(x => x.classList.toggle('on', x.dataset.act === 'mode-' + mode));
+  if (Cells.isOpen()) Cells.close();
+  if (save) send({ t: 'mode', mode });
+  update();
+}
 island.addEventListener('click', e => {
   const c = e.target.closest('[data-click-cell]');
   if (c) { Cells.toggle(c.dataset.clickCell, c); return; }
@@ -546,6 +611,12 @@ island.addEventListener('click', e => {
     case 'next': send({ t: 'cmd', c: 'next' }); break;
     case 'wifi': case 'bt': b.classList.toggle('on'); send({ t: 'cmd', c: a }); break;
     case 'mute': send({ t: 'cmd', c: 'mute' }); break;
+    case 'power':
+      if (b.classList.contains('armed')) { armPower(b, false); send({ t: 'cmd', c: 'shutdown' }); }
+      else armPower(b, true);
+      break;
+    case 'mode-notch': setMode('notch', true); break;
+    case 'mode-capsule': setMode('capsule', true); break;
     default: send({ t: 'cmd', c: a });
   }
 });
@@ -572,7 +643,7 @@ if (host) host.addEventListener('message', e => {
     case 'sys': S.sys = m; renderSys(); break;
     case 'vol': onVol(m); break;
     case 'radios': onRadios(m); break;
-    case 'config': S.config = m; onRadios(S.radios || {}); break;
+    case 'config': S.config = m; onRadios(S.radios || {}); setMode(m.mode || 'capsule', false); if (S.config.wifi) $('#b-net').dataset.cell = 'wifi'; introStart(); break;
     case 'tg': onTgMessage(m); break;
     case 'net': onNet(m); break;
     case 'tgUnread': onTgUnread(m.n); break;

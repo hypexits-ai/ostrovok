@@ -5,7 +5,7 @@
 <title>Островок</title>
 <link rel="stylesheet" href="style.css">
 </head>
-<body data-media="0" data-playing="0">
+<body data-media="0" data-playing="0" class="intro">
 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <defs>
@@ -68,8 +68,10 @@
   <symbol id="g-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17"/><path d="M12 3.5c2.4 2.4 3.6 5.2 3.6 8.5s-1.2 6.1-3.6 8.5c-2.4-2.4-3.6-5.2-3.6-8.5S9.6 5.9 12 3.5z"/></symbol>
   <symbol id="g-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
   <symbol id="g-user" viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.8"/><path d="M4.5 20a7.5 7.5 0 0 1 15 0"/></symbol>
-  <symbol id="g-ethernet" viewBox="0 0 24 24"><rect x="3" y="14" width="6" height="6" rx="1.2"/><rect x="15" y="14" width="6" height="6" rx="1.2"/><rect x="9" y="3.5" width="6" height="6" rx="1.2"/><path d="M12 9.5V12M6 14v-2h12v2"/></symbol>
-  <symbol id="g-offline" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.4 2.4 3.6 5.2 3.6 8.5s-1.2 6.1-3.6 8.5c-2.4-2.4-3.6-5.2-3.6-8.5S9.6 5.9 12 3.5zM4 4l16 16"/></symbol>
+  <symbol id="g-ethernet" viewBox="0 0 24 24"><rect x="3.5" y="4" width="17" height="11.5" rx="1.6"/><path d="M12 15.5v3.2M8.5 20.2h7"/></symbol>
+  <symbol id="g-offline" viewBox="0 0 24 24"><path d="M20.5 11a8.5 8.5 0 1 0-9.5 9.4"/><path d="M3.6 12h11.4M12 3.5c2.2 2.3 3.3 4.9 3.4 7.8M12 3.5C9.6 5.9 8.4 8.7 8.4 12s1.2 6.1 3.6 8.5"/><circle cx="18" cy="18" r="3.6"/><path d="M15.5 20.5l5-5"/></symbol>
+  <symbol id="g-up" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6" stroke-width="2.4"/></symbol>
+  <symbol id="g-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" stroke-width="2.4"/></symbol>
   <symbol id="g-gpu"viewBox="0 0 24 24"><rect x="2.5" y="6.5" width="19" height="11" rx="2"/><circle cx="9" cy="12" r="2.6"/><path d="M15 10h3.5M15 13.5h3.5M5 17.5v2M8.5 17.5v2"/></symbol>
   <symbol id="g-send" viewBox="0 0 24 24"><path d="M20.5 3.8L3.8 10.6l7 2.6 2.6 7z"/><path d="M20.5 3.8l-9.7 9.4"/></symbol>
   <symbol id="g-timer" viewBox="0 0 24 24"><circle cx="12" cy="13.5" r="7.5"/><path d="M12 13.5V9.5M9.5 2.5h5"/></symbol>
@@ -100,9 +102,10 @@
             <button class="ib" data-act="next" id="b-next" title="Следующий трек"><svg class="ic"><use href="#g-next"/></svg></button>
           </div>
         </div>
+        <div class="lift" title="Вид островка"><button class="lb" data-act="mode-notch" title="Вырез: прижать к краю экрана"><svg class="ic"><use href="#g-up"/></svg></button><button class="lb on" data-act="mode-capsule" title="Капсула"><svg class="ic"><use href="#g-down"/></svg></button></div>
         <button class="ib sq net" data-act="netsettings" id="b-net" title="Интернет" hidden><svg class="ic"><use href="#g-ethernet"/></svg></button>
         <button class="ib sq" data-act="settings" title="Параметры Windows"><svg class="ic"><use href="#g-gear"/></svg></button>
-        <button class="ib sq" data-click-cell="power" title="Сон, перезагрузка, выключение"><svg class="ic"><use href="#g-power"/></svg></button>
+        <button class="ib sq pw-btn" data-act="power" data-cell="power" title="Выключение · правый клик — сон и перезагрузка"><svg class="ic"><use href="#g-power"/></svg><span>Выключить?</span></button>
       </div>
 
       <div class="mid stg" style="--i:1">
@@ -117,7 +120,7 @@
       </div>
 
       <div class="xb stg" style="--i:2">
-        <button class="search-wide" data-click-cell="search" title="Поиск"><svg class="ic"><use href="#g-search"/></svg><span>Поиск</span></button>
+        <button class="search-wide" data-click-cell="search" data-cell="search" title="Поиск"><svg class="ic"><use href="#g-search"/></svg><span>Поиск</span></button>
         <span class="divd"></span>
         <div class="tgs">
           <button class="tg" data-act="wifi" data-cell="wifi" id="t-wifi" title="Wi-Fi · правый клик — сети" hidden><svg class="ic"><use href="#g-wifi"/></svg></button>
@@ -125,11 +128,11 @@
           <button class="tg mute" data-act="mute" data-cell="sound" id="t-mute" title="Без звука · правый клик — звук"><svg class="ic"><use href="#g-mute"/></svg></button>
         </div>
         <label class="vol" data-cell="sound" title="Правый клик — устройства и микшер"><svg class="ic"><use href="#g-vol"/></svg><input class="rng" type="range" id="vol" min="0" max="100" value="50" aria-label="Громкость"><b id="vol-n">50</b></label>
-        <div class="cpu-mini rc" data-cell="cpu" title="Процессор · правый клик — что нагружает компьютер">
+        <div class="cpu-mini rc" data-act="taskmgr" data-cell="cpu" title="Процессор · правый клик — что нагружает компьютер">
           <div class="gauge"><svg viewBox="0 0 64 64"><circle class="g-tr" cx="32" cy="32" r="26"/><circle class="g-val" cx="32" cy="32" r="26"/></svg><svg class="ic g-ic"><use href="#g-cpu"/></svg></div>
           <b data-b="g-main"></b>
         </div>
-        <div class="cpu-mini gpu-mini rc" data-cell="cpu" id="gpu-mini" title="Видеокарта · правый клик — подробнее" hidden>
+        <div class="cpu-mini gpu-mini rc" data-act="taskmgr" data-cell="cpu" id="gpu-mini" title="Видеокарта · правый клик — подробнее" hidden>
           <div class="gauge"><svg viewBox="0 0 64 64"><circle class="g-tr" cx="32" cy="32" r="26"/><circle class="g-val" id="gpu-ring" cx="32" cy="32" r="26"/></svg><svg class="ic g-ic"><use href="#g-gpu"/></svg></div>
           <b data-b="gpu-main"></b>
         </div>

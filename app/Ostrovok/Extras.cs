@@ -128,6 +128,10 @@ sealed class AppSettings
     public string City { get; set; }
     /// <summary>After this many minutes without the pointer on it, the island shrinks to its smallest form.</summary>
     public double IdleMinutes { get; set; } = 5;
+    /// <summary>"capsule" (floats under the screen edge) or "notch" (hangs from it).</summary>
+    public string Mode { get; set; } = "capsule";
+    /// <summary>Stay visible over borderless full-screen games and videos (exclusive full screen still hides it).</summary>
+    public bool OverFullscreen { get; set; } = true;
 
     static string FilePath => Path.Combine(Log.Dir, "settings.json");
 

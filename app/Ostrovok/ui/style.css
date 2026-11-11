@@ -12,8 +12,11 @@ button,input{font-family:inherit}
 
 /* ───────── island ───────── */
 #hot{position:absolute;left:50%;top:0;height:9px;width:340px;transform:translateX(-50%)}
-.island{position:absolute;left:50%;top:8px;transform:translateX(-50%);background:#000;font-size:12px;width:330px;height:36px;border-radius:18px;box-shadow:0 0 0 .5px rgba(255,255,255,.08);z-index:5}
+.island{position:absolute;left:50%;top:-80px;transform:translateX(-50%);background:#000;font-size:12px;width:330px;height:36px;border-radius:18px;box-shadow:0 0 0 .5px rgba(255,255,255,.08);z-index:5}
 .clip{position:absolute;inset:0;overflow:hidden;border-radius:inherit}
+/* first appearance: the island fades in while it slides down from the screen edge */
+.island{transition:opacity .7s ease}
+body.intro .island,body.intro .goo,body.intro #hot{opacity:0}
 .layer{position:absolute;left:50%;top:0;transform:translateX(-50%) scale(.94);opacity:0;filter:blur(6px);pointer-events:none;box-sizing:border-box;transition:opacity .14s,filter .14s,transform .3s}
 .island[data-state="collapsed"] .l-col,.island[data-state="event"] .l-evt,.island[data-state="mini"] .l-mini{opacity:1;filter:none;transform:translateX(-50%);pointer-events:auto;transition:opacity .32s .1s,filter .32s .1s,transform .45s .1s cubic-bezier(.2,.9,.2,1)}
 .island[data-state="expanded"] .l-exp{opacity:1;filter:none;transform:translateX(-50%);pointer-events:auto;transition:none}
@@ -39,11 +42,12 @@ body[data-playing="1"] .i-play,body[data-playing="0"] .i-pause{display:none}
 @keyframes eq{0%{transform:scaleY(.25)}45%{transform:scaleY(1)}100%{transform:scaleY(.45)}}
 body[data-playing="0"] .eq i{animation:none;transform:scaleY(.2);height:100%}
 
-/* time in the middle; each side's group is centred in its own half, and the island is sized
-   so the wider side just fits, so both sides sit the same distance from the time */
-.l-col{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);column-gap:14px;align-items:center;padding:0 14px;height:36px}
-.cl-left,.cl-right,.cl-apps{display:flex;align-items:center;gap:6px;justify-self:center;white-space:nowrap}
+/* app icons hug the left edge, CPU/GPU hug the right edge, and the time keeps the same gap to both:
+   the layer is as wide as its content and the island takes that width */
+.l-col{display:flex;align-items:center;gap:16px;padding:0 14px;height:36px;white-space:nowrap}
+.cl-left,.cl-right,.cl-apps{display:flex;align-items:center;gap:6px;white-space:nowrap}
 .cl-right{gap:9px}
+.cl-left:not(:has(> :not([hidden]):not(:empty))){display:none}
 .cl-mid{font-weight:600;font-size:13px;white-space:nowrap}
 .timer-chip{display:inline-flex;align-items:center;gap:4px;color:#ffb340}
 .timer-chip .ic{width:14px;height:14px;stroke-width:2}
@@ -72,6 +76,18 @@ body[data-playing="0"] .eq i{animation:none;transform:scaleY(.2);height:100%}
 .ib.sq:hover{background:rgba(255,255,255,.16)}
 .ib.sq .ic{width:17px;height:17px}
 .ib.sq.net.off{color:#ff6b74}
+/* elevator buttons: up = notch, down = capsule */
+.lift{display:flex;flex-direction:column;gap:2px;height:34px;justify-content:center}
+.lb{all:unset;cursor:pointer;width:26px;height:16px;border-radius:6px;display:grid;place-items:center;background:rgba(255,255,255,.08);color:rgba(255,255,255,.55);transition:background .2s,color .2s}
+.lb:hover{background:rgba(255,255,255,.16);color:#fff}
+.lb.on{color:#fff;background:rgba(255,255,255,.2)}
+.lb .ic{width:13px;height:13px}
+/* power: first click arms, second shuts down */
+.pw-btn{transition:background .2s,width .25s,padding .25s}
+.pw-btn span{display:none;font-size:12.5px;font-weight:600;margin-left:6px}
+.pw-btn.armed{width:auto!important;padding:0 12px;border-radius:17px!important;background:#e5484d!important;display:flex;animation:armed 1s ease-in-out infinite}
+.pw-btn.armed span{display:inline}
+@keyframes armed{50%{background:#c9353a}}
 .ib[disabled]{opacity:.35;pointer-events:none}
 .cap{font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:rgba(255,255,255,.42);font-weight:600}
 .rc{border-radius:12px;transition:background .2s,box-shadow .2s}
@@ -180,11 +196,18 @@ body[data-playing="0"] .eq i{animation:none;transform:scaleY(.2);height:100%}
 body.goo-on .goo{opacity:1}
 body.goo-on .island{background:transparent;box-shadow:none}
 .blob{position:absolute;background:#000}
-#gMain{left:50%;top:8px;transform:translateX(-50%)}
+#gMain{left:50%;top:-80px;transform:translateX(-50%)}
+/* notch mode: the island hangs from the screen edge; inverse "ears" blend it in */
+.island::before,.island::after,#gMain::before,#gMain::after{content:"";position:absolute;top:0;width:var(--ear,0px);height:var(--ear,0px);pointer-events:none}
+.island::before,#gMain::before{left:calc(-1 * var(--ear,0px));background:radial-gradient(circle at 0 100%,transparent calc(var(--ear,0px) - .5px),#000 var(--ear,0px))}
+.island::after,#gMain::after{right:calc(-1 * var(--ear,0px));background:radial-gradient(circle at 100% 100%,transparent calc(var(--ear,0px) - .5px),#000 var(--ear,0px))}
+body.goo-on .island::before,body.goo-on .island::after{display:none}
+body.notch .island{box-shadow:none}
+body.notch #hot{height:4px}
 .cg{position:absolute;border-radius:32px;will-change:transform;left:-9999px;top:0;width:10px;height:10px}
 
 /* trash cell (drag a window or the player) */
-.trash-geo{position:absolute;left:calc(50% + 378px);top:135px;width:86px;height:86px;border-radius:43px;transform:translateX(-122px) scale(.5);transition:transform .5s cubic-bezier(.4,0,.6,1)}
+.trash-geo{position:absolute;left:calc(50% + 378px);top:calc(var(--it,8px) + 127px);width:86px;height:86px;border-radius:43px;transform:translateX(-122px) scale(.5);transition:transform .5s cubic-bezier(.4,0,.6,1)}
 body.split .trash-geo{transform:none;transition:transform .62s cubic-bezier(.3,1.45,.5,1)}
 body.split .trash-geo.hot{transform:scale(1.1);transition:transform .35s cubic-bezier(.3,1.6,.5,1)}
 .trash{display:grid;place-items:center;color:#ff5a64;opacity:0;pointer-events:none;z-index:6;
