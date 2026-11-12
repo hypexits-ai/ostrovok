@@ -413,7 +413,7 @@ function onBattery(m) {
   el.className = 'bat' + (m.charging ? ' charging' : '') + (low ? ' low' : '');
   el.title = `Батарея ${lvl}%` + (m.charging ? ', от сети' : '');
   el.innerHTML = (m.charging ? '<svg class="bolt" viewBox="0 0 9 12"><path d="M5.6 0 0 7h3.4L2.8 12 9 4.6H5.4z"/></svg>' : '')
-    + `<svg class="cell" viewBox="0 0 31 16"><defs><clipPath id="bat-clip"><rect x="3" y="3" width="${w}" height="10" rx="1.5"/></clipPath></defs>`
+    + `<svg class="bat-cell" viewBox="0 0 31 16"><defs><clipPath id="bat-clip"><rect x="3" y="3" width="${w}" height="10" rx="1.5"/></clipPath></defs>`
     + '<rect class="outline" x=".75" y=".75" width="26.5" height="14.5" rx="4"/><path class="nub" d="M28.5 5h.8a1.2 1.2 0 0 1 1.2 1.2v3.6a1.2 1.2 0 0 1-1.2 1.2h-.8z"/>'
     + `<rect class="lvl" x="3" y="3" width="${w}" height="10" rx="1.5"/><text class="t-out" x="14" y="8.4">${lvl}</text><text class="t-in" x="14" y="8.4" clip-path="url(#bat-clip)">${lvl}</text></svg>`;
 }

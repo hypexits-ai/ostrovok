@@ -139,7 +139,7 @@ body[data-playing="0"] .eq i{animation:none;transform:scaleY(.2);height:100%}
 .st-net svg{width:18px;height:18px;fill:none;stroke-linecap:round;stroke-linejoin:round}
 .bat{display:flex;align-items:center;gap:3px}
 .bat .bolt{width:9px;height:12px;fill:#5be38f}
-.bat svg.cell{width:31px;height:16px;overflow:visible}
+.bat svg.bat-cell{display:block;width:31px;height:16px;overflow:visible}
 .bat .outline{fill:none;stroke:rgba(255,255,255,.82);stroke-width:1.5}
 .bat .nub{fill:rgba(255,255,255,.82)}
 .bat .lvl{fill:#fff}
