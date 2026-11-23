@@ -64,6 +64,9 @@ static class Native
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     public static extern IntPtr FindWindowEx(IntPtr parent, IntPtr after, string cls, string title);
 
+    [StructLayout(LayoutKind.Sequential)] public struct LastInput { public uint size, time; }
+    [DllImport("user32.dll")] public static extern bool GetLastInputInfo(ref LastInput input);
+
     public static string ClassName(IntPtr h)
     {
         var sb = new StringBuilder(256);

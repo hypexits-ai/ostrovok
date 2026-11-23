@@ -896,9 +896,31 @@ sealed class IslandForm : Form
 
     // ───────────── housekeeping ─────────────
 
+    bool readingTemp;
+    async void RefreshTemperature()
+    {
+        if (readingTemp) return;
+        readingTemp = true;
+        try
+        {
+            bool desktop = SystemInformation.PowerStatus.BatteryChargeStatus.HasFlag(BatteryChargeStatus.NoSystemBattery)
+                && SystemInformation.PowerStatus.BatteryChargeStatus != BatteryChargeStatus.Unknown;
+            double? value = desktop ? await Task.Run(SysMonitor.ReadCpuTemperature) : null;
+            if (!IsDisposed) Post(new { t = "cpuTemp", desktop, value });
+        }
+        finally { readingTemp = false; }
+    }
+
     void SlowTick()
     {
         tick++;
+        if (ready)
+        {
+            var input = new Native.LastInput { size = 8 };
+            if (Native.GetLastInputInfo(ref input))
+                Post(new { t = "idle", on = settings.IdleMinutes > 0 && unchecked((uint)Environment.TickCount - input.time) >= settings.IdleMinutes * 60000 });
+            if (tick % 5 == 1) RefreshTemperature();
+        }
         PushWindows();
         if (ready) PollTelegram();
         foreach (var w in watching.ToList())

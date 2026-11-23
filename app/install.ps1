@@ -13,7 +13,7 @@ Write-Host 'Building...'
 dotnet publish $project -c Release -r win-x64 --self-contained true -o $publish -v q
 if ($LASTEXITCODE -ne 0) { throw 'Build failed' }
 
-Get-Process Ostrovok -ErrorAction SilentlyContinue | Stop-Process -Force
+Get-CimInstance Win32_Process -Filter "Name='Ostrovok.exe'" | Where-Object { $_.CommandLine -and $_.CommandLine -notmatch '--taskbar-guard' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 Start-Sleep -Milliseconds 800
 
 New-Item -ItemType Directory -Force $dest | Out-Null

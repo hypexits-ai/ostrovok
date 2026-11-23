@@ -504,3 +504,6 @@ body.split .trash.hot{transition:transform .35s cubic-bezier(.3,1.6,.5,1),backgr
 @media(prefers-reduced-motion:reduce){.layout-list i,.layout-list span{transition:none}}
 
 .l-col [data-b="time"],.l-mini [data-b="time"]{position:relative;top:-1px}
+
+.cl-apps{display:flex;align-items:center;gap:6px}.cl-apps:empty{display:none}
+[data-desktop-temp]{font-size:12px;white-space:nowrap}

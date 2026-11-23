@@ -224,10 +224,7 @@ const isMessage = () => S.ev && S.ev.kind === 'msg';
 // after a while without the pointer the island shrinks to its smallest form
 S.lastActive = Date.now();
 function touchActive() { S.lastActive = Date.now(); if (S.idle) { S.idle = false; update(); } }
-setInterval(() => {
-  const limit = (S.config.idleMinutes ?? 5) * 60000;
-  if (!S.idle && !S.hover && limit > 0 && Date.now() - S.lastActive > limit && !(typeof Cells !== 'undefined' && Cells.isOpen())) { S.idle = true; update(); }
-}, 5000);
+
 // In a game (or anything full screen) the hidden pointer sweeps across the island while the camera turns.
 // There the island opens only once the pointer rests on it for a moment (a sweep never rests), and never
 // while a mouse button is held (turning the camera with a held button).
@@ -424,6 +421,12 @@ function renderWins() {
   $('#wins').innerHTML = wins.length ? wins.map(w =>
     `<button class="wrow${w.active ? ' act' : ''}" data-win="${w.id}" data-drag="win" title="${esc(w.title)}">${appIcon(w.icon, w.name, 28)}<div><b>${esc(w.name)}</b></div></button>`
   ).join('') : '<div class="wl-empty">Нет открытых окон</div>';
+  const seen = new Set(), icons = [];
+  for (const w of [...wins.filter(w => w.active), ...wins]) {
+    const key = w.icon || w.name; if (seen.has(key)) continue; seen.add(key);
+    icons.push(appIcon(w.icon, w.name, 18)); if (icons.length === 3) break;
+  }
+  $('#c-apps').innerHTML = icons.join('');
   update();
 }
 
@@ -1048,6 +1051,15 @@ if (host) host.addEventListener('message', e => {
   const m = e.data;
   switch (m.t) {
     case 'favs': S.favs = m.list; wheel.set(m.list); Cells.onFavs(); break;
+    case 'idle':
+      if (m.on !== !!S.idle && (!m.on || (!S.hover && !Cells.isOpen()))) { S.idle = m.on; update(); }
+      break;
+    case 'cpuTemp':
+      for (const el of $('[data-desktop-temp]')) {
+        el.hidden = !m.desktop;
+        el.textContent = m.value == null ? '— °C' : Math.round(m.value) + ' °C';
+      }
+      update(); break;
     case 'wins': S.wins = m.list; renderWins(); break;
     case 'media': onMedia(m); break;
     case 'level': onLevel(m.v); break;

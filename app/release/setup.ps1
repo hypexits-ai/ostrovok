@@ -22,7 +22,7 @@ if (-not $wv) {
 }
 
 Write-Host 'Closing a running copy...'
-Get-Process Ostrovok -ErrorAction SilentlyContinue | Stop-Process -Force
+Get-CimInstance Win32_Process -Filter "Name='Ostrovok.exe'" | Where-Object { $_.CommandLine -and $_.CommandLine -notmatch '--taskbar-guard' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 Start-Sleep -Milliseconds 800
 
 Write-Host "Copying to $dest ..."

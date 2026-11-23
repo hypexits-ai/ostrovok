@@ -1,6 +1,6 @@
 # Removes Ostrovok: stops it, turns off start with Windows, deletes the shortcut and the program.
 # Settings and the log in %LOCALAPPDATA%\Ostrovok are kept (delete that folder too for a clean removal).
-Get-Process Ostrovok -ErrorAction SilentlyContinue | Stop-Process -Force
+Get-CimInstance Win32_Process -Filter "Name='Ostrovok.exe'" | Where-Object { $_.CommandLine -and $_.CommandLine -notmatch '--taskbar-guard' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 Remove-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'Ostrovok' -ErrorAction SilentlyContinue
 Remove-Item (Join-Path ([Environment]::GetFolderPath('Programs')) 'Ostrovok.lnk') -ErrorAction SilentlyContinue
 Start-Sleep -Milliseconds 800

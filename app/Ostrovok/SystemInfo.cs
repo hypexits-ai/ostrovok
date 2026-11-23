@@ -33,6 +33,35 @@ sealed class SysMonitor
         });
     }
 
+    // Use CPU-labelled sensors only. ACPI motherboard zones can measure other components.
+    public static double? ReadCpuTemperature()
+    {
+        foreach (var provider in new[] { "LibreHardwareMonitor", "OpenHardwareMonitor" })
+        {
+            try
+            {
+                using var query = new System.Management.ManagementObjectSearcher(@"root\" + provider,
+                    "SELECT Name, Value, Identifier FROM Sensor WHERE SensorType='Temperature'");
+                using var rows = query.Get();
+                double? best = null;
+                foreach (var row in rows)
+                using (row)
+                {
+                    if (!(row["Identifier"]?.ToString() ?? "").Contains("cpu", StringComparison.OrdinalIgnoreCase) || row["Value"] == null) continue;
+                    double value = Convert.ToDouble(row["Value"]);
+                    if (!double.IsFinite(value) || value <= 0 || value >= 130) continue;
+                    if ((row["Name"]?.ToString() ?? "").Contains("Package", StringComparison.OrdinalIgnoreCase)) return value;
+                    best = Math.Max(best ?? value, value);
+                }
+                if (best.HasValue) return best;
+            }
+            catch (System.Management.ManagementException) { }
+            catch (UnauthorizedAccessException) { }
+            catch (COMException) { }
+        }
+        return null;
+    }
+
     void SampleLoad()
     {
         if (!Native.GetSystemTimes(out long idle, out long kernel, out long user)) return;
