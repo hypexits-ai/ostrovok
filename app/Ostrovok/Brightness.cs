@@ -22,7 +22,23 @@ sealed class BrightnessHub
     IntPtr phys; uint ddcMin, ddcMax;
     bool useDdc, useWmi, announced;
 
-    public BrightnessHub() { _ = Task.Run(Worker); signal.Release(); }   // find the monitor right away
+    ManagementEventWatcher changes;
+
+    public BrightnessHub()
+    {
+        _ = Task.Run(Worker);
+        signal.Release();
+        try
+        {
+            changes = new ManagementEventWatcher(@"root\wmi", "SELECT * FROM WmiMonitorBrightnessEvent");
+            changes.EventArrived += (_, _) => Refresh();
+            changes.Start();
+        }
+        catch (ManagementException) { changes?.Dispose(); changes = null; }
+        catch (UnauthorizedAccessException) { changes?.Dispose(); changes = null; }
+    }
+
+    public void StopWatching() => changes?.Dispose();   // find the monitor right away
 
     public void Set(int percent)
     {

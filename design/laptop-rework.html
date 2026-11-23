@@ -1,0 +1,713 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Островок: переработка для ноутбука</title>
+<style>
+/* Design-review bench for the laptop rework: collapsed view, Alt+Tab ribbon, movable capsule, short events.
+   Single dark look, like the island itself. */
+:root{
+  --bg:#0f0e14; --surface:#18171f; --surface-2:#22202c; --line:#2c2a37;
+  --fg:#eceaf3; --muted:#9a97aa; --accent:#c4b2ff; --green:#5be38f; --red:#ff5a5f;
+  --ui:"Segoe UI Variable Text","Segoe UI Variable","Segoe UI",system-ui,sans-serif;
+  --disp:"Segoe UI Variable Display","Segoe UI Variable","Segoe UI",system-ui,sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--fg)}
+body{font-family:var(--ui);-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums}
+.page{max-width:1120px;margin:0 auto;padding:28px 16px 72px;display:flex;flex-direction:column;gap:22px}
+header h1{font-family:var(--disp);font-weight:700;font-size:32px;letter-spacing:-.02em;margin:0}
+header p{margin:8px 0 0;color:var(--muted);font-size:14.5px;line-height:1.55;max-width:70ch}
+.eyebrow{font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin-bottom:8px;font-weight:600}
+
+nav.tabs{display:flex;flex-wrap:wrap;gap:6px;position:sticky;top:0;z-index:20;background:var(--bg);padding:10px 0;border-bottom:1px solid var(--line)}
+nav.tabs button{all:unset;cursor:pointer;padding:8px 14px;border-radius:10px;color:var(--muted);font-size:14px;font-weight:600}
+nav.tabs button:hover{color:var(--fg)}
+nav.tabs button[aria-selected="true"]{background:var(--surface-2);color:var(--fg)}
+nav.tabs button small{color:var(--accent);margin-right:6px}
+
+section.sec{display:none;flex-direction:column;gap:18px}
+section.sec.on{display:flex}
+section.sec h2{font-family:var(--disp);font-size:24px;margin:0}
+section.sec > p.lead{margin:-8px 0 0;color:var(--muted);font-size:14px;line-height:1.55;max-width:75ch}
+
+.toolbar{display:flex;flex-wrap:wrap;gap:14px 22px;align-items:flex-end}
+.grp{display:flex;flex-direction:column;gap:6px;min-width:0}
+.glbl{font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.seg{display:inline-flex;flex-wrap:wrap;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:3px;gap:2px}
+.seg button{all:unset;cursor:pointer;padding:7px 13px;border-radius:9px;color:var(--muted);font-size:13px;font-weight:500;white-space:nowrap}
+.seg button:hover{color:var(--fg)}
+.seg button[aria-pressed="true"]{background:var(--surface-2);color:var(--fg);box-shadow:inset 0 0 0 1px rgba(255,255,255,.06)}
+.btn{all:unset;cursor:pointer;padding:8px 13px;border-radius:10px;background:var(--surface);border:1px solid var(--line);font-size:13px;font-weight:500;color:var(--fg);white-space:nowrap}
+.btn:hover{background:var(--surface-2)}
+.btn:active{transform:translateY(1px)}
+.btn.pri{background:var(--accent);color:#16121f;border-color:transparent;font-weight:600}
+input[type=range]{accent-color:var(--accent);width:150px}
+.tips{display:flex;flex-wrap:wrap;gap:8px 18px;color:var(--muted);font-size:13px;margin:0;padding:0;list-style:none}
+.tips li{display:flex;gap:7px;align-items:center}
+kbd{font-family:var(--ui);font-size:11.5px;color:var(--fg);background:var(--surface-2);border:1px solid var(--line);border-radius:6px;padding:1px 6px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* ───────── stage: a scaled desktop ───────── */
+.stage{position:relative;width:100%;border-radius:16px;overflow:hidden;border:1px solid var(--line);background:#000}
+.desk{position:absolute;left:0;top:0;width:820px;transform-origin:0 0;overflow:hidden;color:#fff;user-select:none;-webkit-user-select:none;
+  background:radial-gradient(70% 70% at 84% 10%,rgba(236,204,255,.75),transparent 60%),radial-gradient(60% 80% at 8% 92%,rgba(64,36,146,.9),transparent 65%),linear-gradient(140deg,#2b1f63 0%,#5a3fb5 45%,#a98cf5 100%)}
+.desk .lbl{position:absolute;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.7);font-weight:600}
+.taskbar{position:absolute;left:0;right:0;bottom:0;height:34px;background:rgba(20,16,40,.55);backdrop-filter:blur(10px);display:flex;justify-content:center;align-items:center;gap:8px}
+.taskbar i{width:20px;height:20px;border-radius:5px;background:rgba(255,255,255,.25)}
+
+/* ───────── island pieces (mirror app/Ostrovok/ui/style.css) ───────── */
+.isl{position:absolute;background:#000;color:#fff;box-shadow:0 0 0 .5px rgba(255,255,255,.08),0 10px 30px rgba(10,0,40,.35);font-size:12px;overflow:hidden}
+.row{display:flex;align-items:center;white-space:nowrap}
+.col{height:36px;padding:0 14px;gap:16px;border-radius:18px}
+.col .mid{font-weight:600;font-size:13px}
+.col .grp2{display:flex;align-items:center;gap:8px}
+.mini{height:28px;padding:0 12px;gap:9px;border-radius:14px;font-weight:600}
+.cover{width:20px;height:20px;border-radius:6px;flex:none;background:radial-gradient(circle at 28% 26%,rgba(255,236,210,.9),transparent 42%),conic-gradient(from 210deg at 62% 62%,#ff5f8f,#7b5cff,#2ec5ff,#ffb36b,#ff5f8f)}
+.eq{display:inline-flex;align-items:flex-end;gap:2px;height:13px;flex:none}
+.eq i{display:block;width:2.5px;height:100%;border-radius:2px;background:linear-gradient(#ffc27a,#ff5f8f);transform-origin:bottom;animation:eq .9s ease-in-out infinite alternate}
+.eq i:nth-child(2){animation-duration:1.1s;animation-delay:-.3s}.eq i:nth-child(3){animation-duration:.75s;animation-delay:-.5s}
+.eq i:nth-child(4){animation-duration:1.25s;animation-delay:-.2s}.eq i:nth-child(5){animation-duration:.85s;animation-delay:-.7s}
+.mini .eq{height:10px}.mini .eq i{width:2px}
+@keyframes eq{0%{transform:scaleY(.25)}45%{transform:scaleY(1)}100%{transform:scaleY(.45)}}
+
+/* battery without numbers */
+.bat{display:inline-flex;align-items:center;gap:2px;flex:none}
+.bat svg{display:block;overflow:visible}
+.bat .o{fill:none;stroke:rgba(255,255,255,.8);stroke-width:1.3}
+.bat .n{fill:rgba(255,255,255,.8)}
+.bat .l{fill:#fff;transition:width .5s cubic-bezier(.2,.9,.2,1),fill .3s}
+.bat.chg .l{fill:var(--green)}
+.bat.low .l{fill:var(--red)}
+.bat .bolt{fill:var(--green);display:none}
+.bat.chg .bolt{display:block}
+
+/* keyboard layout: three looks */
+.kl{display:inline-grid;flex:none;overflow:hidden;font-weight:700;letter-spacing:.02em;line-height:1}
+.kl span{grid-area:1/1;display:block;transition:transform .38s cubic-bezier(.2,.9,.2,1),opacity .3s}
+.kl span.out{transform:translateY(-120%);opacity:0}
+.kl span.in{transform:translateY(120%);opacity:0}
+.kl.box{font-size:9.5px;padding:2px 4px;border-radius:5px;box-shadow:inset 0 0 0 1.2px rgba(255,255,255,.7)}
+.kl.txt{font-size:11.5px;color:rgba(255,255,255,.78)}
+.kl.fill{font-size:9.5px;padding:3px 5px;border-radius:6px;background:rgba(255,255,255,.16)}
+.mini .kl.txt{font-size:11px}
+.sepdot{width:3px;height:3px;border-radius:50%;background:rgba(255,255,255,.35);flex:none}
+
+/* ───────── variant cards ───────── */
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:14px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:10px;min-width:0;cursor:pointer;transition:border-color .2s}
+.card:hover{border-color:#3d3a4c}
+.card.sel{border-color:rgba(196,178,255,.6)}
+.card h3{font-family:var(--disp);font-size:18px;font-weight:600;margin:0;display:flex;align-items:center;gap:8px}
+.card h3 small{font-family:var(--ui);font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--accent)}
+.card p{margin:0;color:var(--muted);font-size:13.5px;line-height:1.5}
+.card .pick{margin-top:auto;font-size:12.5px;font-weight:600;color:var(--muted)}
+.card.sel .pick{color:var(--accent)}
+.note{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 14px;color:var(--muted);font-size:13.5px;line-height:1.55}
+.note b{color:var(--fg)}
+
+/* ───────── 1a ───────── */
+#a-desk{height:230px}
+#a-desk .isl{left:50%;transform:translateX(-50%)}
+
+/* ───────── 1b: Alt+Tab ribbon ───────── */
+#b-desk{height:330px}
+#b-isl{left:50%;top:8px;transform:translateX(-50%);width:330px;height:36px;border-radius:18px;
+  transition:width .55s cubic-bezier(.2,1.15,.3,1),height .55s cubic-bezier(.2,1.15,.3,1),border-radius .5s}
+#b-isl.open{border-radius:40px}
+#b-isl .colc{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:16px;transition:opacity .2s}
+#b-isl.open .colc{opacity:0;pointer-events:none}
+.rib{position:absolute;left:0;right:0;opacity:0;transition:opacity .25s;
+  -webkit-mask-image:linear-gradient(90deg,transparent 0,#000 18%,#000 82%,transparent 100%);mask-image:linear-gradient(90deg,transparent 0,#000 18%,#000 82%,transparent 100%)}
+#b-isl.open .rib{opacity:1;transition-delay:.12s}
+.rib .items{position:absolute;inset:0;perspective:520px}
+.tile{position:absolute;left:50%;top:50%;width:64px;height:64px;margin:-32px 0 0 -32px;will-change:transform,opacity;cursor:pointer}
+.tile .ap{width:100%;height:100%;border-radius:16px;display:grid;place-items:center;font-weight:700;font-size:24px;letter-spacing:-.03em;box-shadow:0 6px 18px rgba(0,0,0,.45)}
+.tile .ap svg{width:56%;height:56%;fill:none;stroke:#fff;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.tile .wd{position:absolute;left:50%;top:calc(100% + 9px);transform:translateX(-50%);display:flex;gap:4px;opacity:0;transition:opacity .2s}
+.tile .wd i{width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,.3)}
+.tile .wd i.on{background:#fff}
+.rib[data-dup="dots"] .tile .wd{opacity:1}
+.tile.go .ap{animation:launch .45s cubic-bezier(.3,1.6,.5,1)}
+@keyframes launch{35%{transform:scale(.78)}100%{transform:scale(1)}}
+.selmark{position:absolute;left:50%;top:50%;pointer-events:none;transition:opacity .2s}
+.rib[data-v="drum"] .selmark{width:6px;height:6px;margin:44px 0 0 -3px;border-radius:50%;background:#fff;box-shadow:0 0 8px rgba(255,255,255,.7)}
+.rib[data-dup="dots"][data-v="drum"] .selmark{margin-top:56px}
+.rib[data-v="lens"] .selmark{display:none}
+.rib[data-v="frame"] .selmark{width:88px;height:88px;margin:-44px 0 0 -44px;border-radius:24px;background:rgba(255,255,255,.1);box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.55)}
+.thumb{position:absolute;left:50%;top:16px;width:150px;height:86px;margin-left:-75px;border-radius:10px;overflow:hidden;background:#1d1b26;box-shadow:0 0 0 1px rgba(255,255,255,.12);opacity:0;transform:scale(.9);transition:opacity .25s,transform .35s cubic-bezier(.2,1.2,.3,1)}
+#b-isl.open.th .thumb{opacity:1;transform:none;transition-delay:.15s}
+.thumb .bar{height:14px;display:flex;align-items:center;gap:3px;padding:0 6px}
+.thumb .bar i{width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,.5)}
+.thumb .body{position:absolute;inset:14px 0 0;padding:8px;display:grid;gap:5px;align-content:start}
+.thumb .body i{height:6px;border-radius:3px;background:rgba(255,255,255,.14)}
+.keys{display:flex;flex-wrap:wrap;gap:8px}
+.kstate{position:absolute;left:14px;bottom:12px;font-size:12px;color:rgba(255,255,255,.85);display:flex;gap:6px;align-items:center}
+.kstate kbd{background:rgba(0,0,0,.35);border-color:rgba(255,255,255,.2)}
+.kstate kbd.down{background:#fff;color:#000}
+.toast{position:absolute;right:14px;bottom:12px;font-size:12.5px;background:rgba(0,0,0,.55);padding:6px 10px;border-radius:9px;opacity:0;transition:opacity .25s}
+.toast.on{opacity:1}
+
+/* ───────── 1c: movable capsule ───────── */
+#c-desk{height:440px}
+#c-isl{left:0;top:0;transition:width .45s cubic-bezier(.2,1.1,.3,1),height .45s cubic-bezier(.2,1.1,.3,1),border-radius .4s}
+#c-isl.anim{transition:left .5s cubic-bezier(.2,1.1,.3,1),top .5s cubic-bezier(.2,1.1,.3,1),width .45s cubic-bezier(.2,1.1,.3,1),height .45s cubic-bezier(.2,1.1,.3,1),border-radius .4s}
+#c-isl .colc{position:absolute;left:0;top:0;height:36px;width:max-content;white-space:nowrap;display:flex;align-items:center;gap:16px;padding:0 14px;transition:opacity .2s}
+#c-isl.big .colc{opacity:0}
+#c-isl .bigc{position:absolute;inset:0;display:grid;place-items:center;color:rgba(255,255,255,.45);font-size:13px;opacity:0;transition:opacity .2s}
+#c-isl.big .bigc{opacity:1;transition-delay:.15s}
+.hdl{display:flex;flex-direction:column;justify-content:center;gap:3px;height:36px;padding:0 4px 0 2px;cursor:grab;flex:none;transition:opacity .2s,width .3s,margin .3s}
+.hdl i{display:block;width:12px;height:1.6px;border-radius:2px;background:rgba(255,255,255,.4);transition:background .2s,width .2s}
+.hdl:hover i{background:#fff}
+#c-isl.drag .hdl{cursor:grabbing}
+#c-isl.drag .hdl i{background:#fff}
+#c-isl.drag{box-shadow:0 0 0 .5px rgba(255,255,255,.15),0 18px 40px rgba(10,0,40,.55)}
+.vdiv{width:1px;height:16px;background:rgba(255,255,255,.14);flex:none;transition:opacity .2s}
+/* variant B: the handle shows up only while the pointer is over the island */
+#c-desk[data-v="hover"] .hdl{width:0;padding:0;margin-left:-16px;opacity:0;overflow:hidden}
+#c-desk[data-v="hover"] .vdiv{display:none}
+#c-desk[data-v="hover"] #c-isl:hover .hdl,#c-desk[data-v="hover"] #c-isl.drag .hdl{width:18px;padding:0 4px 0 2px;margin-left:0;opacity:1}
+/* variant C: a small tab outside the island */
+#c-tab{position:absolute;width:16px;height:26px;border-radius:0 9px 9px 0;background:#000;display:none;flex-direction:column;justify-content:center;align-items:center;gap:3px;cursor:grab;
+  box-shadow:0 0 0 .5px rgba(255,255,255,.08);opacity:0;transition:opacity .2s}
+#c-tab i{display:block;width:8px;height:1.6px;border-radius:2px;background:rgba(255,255,255,.55)}
+#c-tab:hover i{background:#fff}
+#c-desk[data-v="tab"] #c-tab{display:flex}
+#c-desk[data-v="tab"] .hdl,#c-desk[data-v="tab"] .vdiv{display:none}
+#c-desk[data-v="tab"].near #c-tab,#c-desk[data-v="tab"] #c-tab.drag{opacity:1}
+/* chosen look: always-visible lines spaced like any other item, no divider */
+#c-desk[data-v="always"] .vdiv{display:none}
+#c-desk[data-v="always"] .hdl{padding:0;width:12px;margin-left:0}
+/* in notch mode the lines fold away and the island narrows by exactly their slot */
+#c-desk[data-mode="notch"] .hdl{width:0!important;padding:0!important;margin-left:-16px!important;opacity:0;overflow:hidden}
+#c-desk[data-mode="notch"] .vdiv,#c-desk[data-mode="notch"] #c-tab{display:none!important}
+#c-isl .colc{padding:0 16px}
+.ghostspot{position:absolute;border-radius:18px;border:1.5px dashed rgba(255,255,255,.55);pointer-events:none;opacity:0;transition:opacity .2s}
+.ghostspot.on{opacity:1}
+
+/* ───────── 1d: events ───────── */
+#d-desk{height:200px}
+#d-isl{left:50%;top:8px;transform:translateX(-50%);width:200px;height:36px;border-radius:18px;transition:width .5s cubic-bezier(.2,1.15,.3,1),height .5s cubic-bezier(.2,1.15,.3,1),border-radius .45s}
+#d-isl > div{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .18s;pointer-events:none}
+#d-isl > div.on{opacity:1;transition:opacity .3s .12s}
+.ev{gap:12px;padding:0 16px}
+.ev .gl{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;flex:none}
+.ev .gl svg{width:16px;height:16px;fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.ev .tx{display:flex;flex-direction:column;gap:2px;min-width:0}
+.ev .tx b{font-size:13.5px;font-weight:600}
+.ev .tx span{font-size:11.5px;color:rgba(255,255,255,.55)}
+.ev .sp{flex:1}
+.lay-big{display:inline-grid;overflow:hidden;font-family:var(--disp);font-size:22px;font-weight:700;letter-spacing:.02em;line-height:1.1}
+.lay-big span{grid-area:1/1;transition:transform .45s cubic-bezier(.2,.9,.2,1),opacity .3s}
+.lay-big span.out{transform:translateY(-110%);opacity:0}
+.lay-big span.in{transform:translateY(110%);opacity:0}
+.ev .tx b.lay-name{font-family:var(--ui);font-size:13.5px;font-weight:600;letter-spacing:0;line-height:1.25}
+.lay-list{position:relative;display:flex;gap:4px;padding:3px;border-radius:12px;background:rgba(255,255,255,.08)}
+.lay-list b{position:relative;z-index:1;font-size:12.5px;font-weight:700;padding:6px 10px;color:rgba(255,255,255,.5);transition:color .3s}
+.lay-list b.on{color:#000}
+.lay-list .pill{position:absolute;top:3px;bottom:3px;border-radius:9px;background:#fff;transition:left .4s cubic-bezier(.2,1.1,.3,1),width .4s}
+.lvlbar{width:110px;height:6px;border-radius:4px;background:rgba(255,255,255,.18);overflow:hidden}
+.lvlbar i{display:block;height:100%;background:#fff;border-radius:4px}
+.flash{animation:flash .9s ease-out}
+@keyframes flash{0%{box-shadow:0 0 0 0 rgba(255,255,255,.6)}100%{box-shadow:0 0 0 10px rgba(255,255,255,0)}}
+
+/* ───────── summary ───────── */
+.summary{background:var(--surface);border:1px solid rgba(196,178,255,.35);border-radius:16px;padding:16px;display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.summary code{font-family:var(--ui);font-size:14px;color:var(--fg);flex:1;min-width:240px;line-height:1.6}
+</style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <div class="eyebrow">Этап 1 · дизайн</div>
+    <h1>Островок для ноутбука</h1>
+    <p>Четыре идеи, по нескольку вариантов на каждую. Всё здесь живое: переключайте варианты, нажимайте клавиши и тяните капсулу. Выбирайте вариант кликом по карточке. Внизу страницы соберётся строка с выбором, её можно скопировать и прислать мне.</p>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" data-tab="a" aria-selected="true"><small>1a</small>Свёрнутый вид</button>
+    <button role="tab" data-tab="b" aria-selected="false"><small>1b</small>Alt+Tab</button>
+    <button role="tab" data-tab="c" aria-selected="false"><small>1c</small>Перемещение капсулы</button>
+    <button role="tab" data-tab="d" aria-selected="false"><small>1d</small>Уведомления</button>
+  </nav>
+
+  <!-- ═════════════ 1a ═════════════ -->
+  <section class="sec on" id="sec-a">
+    <h2>Свёрнутый вид: время · батарея · раскладка</h2>
+    <p class="lead">ЦП и видеокарта убраны полностью. Батарея показывается иконкой без цифр: белая, зелёная с молнией при зарядке, красная при заряде ниже 20%. Раскладка меняется с короткой анимацией. Сверху — обычный свёрнутый остров, снизу — мини-вид после простоя.</p>
+    <div class="toolbar">
+      <div class="grp"><span class="glbl">Вариант</span><div class="seg" data-seg="a"><button data-v="A">А · Справа вместе</button><button data-v="B">Б · По краям</button><button data-v="C">В · Слитно</button></div></div>
+      <div class="grp"><span class="glbl">Заряд</span><input type="range" id="a-lvl" min="5" max="100" value="72" aria-label="Уровень заряда"></div>
+      <div class="grp"><span class="glbl">Проверить</span><div class="keys"><button class="btn" id="a-chg">Зарядка: выкл</button><button class="btn" id="a-lay">Сменить раскладку</button><button class="btn" id="a-mus">Музыка: выкл</button></div></div>
+    </div>
+    <div class="stage" data-h="230"><div class="desk" id="a-desk">
+      <span class="lbl" style="left:16px;top:16px">Свёрнутый</span>
+      <div class="isl row col" id="a-col" style="top:40px"></div>
+      <span class="lbl" style="left:16px;top:126px">Мини (после простоя)</span>
+      <div class="isl row mini" id="a-mini" style="top:150px"></div>
+    </div></div>
+    <div class="cards" data-cards="a">
+      <div class="card" data-v="A"><h3><small>А</small>Справа вместе</h3><p>Как строка состояния телефона: время по центру, справа раскладка в рамке и батарея. Слева, как сейчас, обложка трека, когда играет музыка.</p><span class="pick">Выбрать</span></div>
+      <div class="card" data-v="B"><h3><small>Б</small>По краям</h3><p>Симметрично: раскладка слева, батарея справа, время по центру. Раскладка без рамки, просто буквами. Музыка встаёт рядом со временем.</p><span class="pick">Выбрать</span></div>
+      <div class="card" data-v="C"><h3><small>В</small>Слитно</h3><p>Всё одной группой через точки-разделители: самый узкий остров. Раскладка на светлой подложке.</p><span class="pick">Выбрать</span></div>
+    </div>
+  </section>
+
+  <!-- ═════════════ 1b ═════════════ -->
+  <section class="sec" id="sec-b">
+    <h2>Alt+Tab через остров</h2>
+    <p class="lead">Остров раскрывается в ленту больших иконок открытых окон, без подписей. Лента прокручивается так же, как колесо избранного, только горизонтально. Каждое нажатие Tab двигает выбор вправо, а лента уезжает справа налево, держа выбранное окно по центру. Как и в Windows, сразу при открытии выбрано предыдущее окно, поэтому одно быстрое Alt+Tab переключает между двумя последними окнами.</p>
+    <div class="toolbar">
+      <div class="grp"><span class="glbl">Вариант ленты</span><div class="seg" data-seg="b"><button data-v="drum">А · Барабан</button><button data-v="lens">Б · Лупа</button><button data-v="frame">В · Рамка</button></div></div>
+      <div class="grp"><span class="glbl">Несколько окон одного приложения</span><div class="seg" data-seg="bdup"><button data-v="same">Просто повтор</button><button data-v="dots">Точки под иконкой</button><button data-v="thumb">Миниатюра окна</button></div></div>
+    </div>
+    <ul class="tips">
+      <li>Кликните по картинке, затем: <kbd>Tab</kbd> вперёд,</li>
+      <li><kbd>Shift</kbd>+<kbd>Tab</kbd> назад,</li>
+      <li><kbd>Enter</kbd> — «отпустить Alt» и переключиться,</li>
+      <li><kbd>Esc</kbd> — отмена.</li>
+      <li>Колесо мыши и клик по иконке тоже работают.</li>
+    </ul>
+    <div class="keys"><button class="btn pri" id="b-tab">Alt+Tab</button><button class="btn" id="b-stab">Alt+Shift+Tab</button><button class="btn" id="b-rel">Отпустить Alt</button><button class="btn" id="b-esc">Esc</button></div>
+    <div class="stage" data-h="330"><div class="desk" id="b-desk" tabindex="0" aria-label="Демо Alt+Tab: Tab, Shift+Tab, Enter, Esc">
+      <div class="isl" id="b-isl">
+        <div class="colc" id="b-colc"></div>
+        <div class="thumb" id="b-thumb"><div class="bar"><i></i><i></i><i></i></div><div class="body"><i style="width:80%"></i><i style="width:55%"></i><i style="width:68%"></i><i style="width:40%"></i></div></div>
+        <div class="rib" id="b-rib"><div class="items" id="b-items"></div><div class="selmark"></div></div>
+      </div>
+      <div class="kstate"><kbd id="k-alt">Alt</kbd><kbd id="k-tab">Tab</kbd><span id="k-hint">Кликните сюда и нажмите Tab</span></div>
+      <div class="toast" id="b-toast"></div>
+      <div class="taskbar"><i></i><i></i><i></i><i></i><i></i></div>
+    </div></div>
+    <div class="cards" data-cards="b">
+      <div class="card" data-v="drum"><h3><small>А</small>Барабан</h3><p>Иконки стоят на вращающемся барабане, как в колесе избранного: по краям уходят в глубину и тускнеют. Под выбранной горит точка.</p><span class="pick">Выбрать</span></div>
+      <div class="card" data-v="lens"><h3><small>Б</small>Лупа</h3><p>Плоский ряд, выбранная иконка крупнее, соседние плавно уменьшаются, как в доке macOS. Никаких дополнительных отметок.</p><span class="pick">Выбрать</span></div>
+      <div class="card" data-v="frame"><h3><small>В</small>Рамка</h3><p>Неподвижная стеклянная рамка по центру, иконки проезжают через неё. Самый спокойный вариант, выбор виден лучше всего.</p><span class="pick">Выбрать</span></div>
+    </div>
+    <div class="note"><b>Несколько окон одного приложения</b> (у вас в примере два окна Chrome и два Проводника). «Просто повтор» — одинаковые иконки рядом. «Точки» — под иконкой видно, какое это окно по счёту. «Миниатюра» — над лентой появляется настоящий снимок выбранного окна, остров становится выше.</div>
+  </section>
+
+  <!-- ═════════════ 1c ═════════════ -->
+  <section class="sec" id="sec-c">
+    <h2>Перемещаемая капсула</h2>
+    <p class="lead">Только в режиме капсулы. Справа появляются две горизонтальные линии: за них капсулу можно тянуть, а наведение на них не раскрывает остров. Наведите на саму капсулу и подождите — она раскроется, как обычно, и уместится в экран, даже если стоит у нижнего края. Двойной клик по линиям возвращает капсулу на место по центру сверху.</p>
+    <div class="toolbar">
+      <div class="grp"><span class="glbl">Вариант ручки</span><div class="seg" data-seg="c"><button data-v="always">А · Всегда видна</button><button data-v="hover">Б · При наведении</button><button data-v="tab">В · Язычок снаружи</button></div></div>
+      <div class="grp"><span class="glbl">Куда можно ставить</span><div class="seg" data-seg="cplace"><button data-v="free">Куда угодно</button><button data-v="top">Только вдоль верха</button><button data-v="snap">Магнит к 6 точкам</button></div></div>
+      <div class="grp"><span class="glbl">Режим</span><div class="seg" data-seg="cmode"><button data-v="capsule">Капсула</button><button data-v="notch">Чёлка</button></div></div>
+    </div>
+    <div class="stage" data-h="440"><div class="desk" id="c-desk">
+      <div class="ghostspot" id="c-ghost"></div>
+      <div class="isl" id="c-isl"><div class="colc" id="c-colc"></div><div class="bigc">раскрытый остров</div></div>
+      <div id="c-tab"><i></i><i></i></div>
+      <div class="toast" id="c-toast" style="bottom:46px"></div>
+      <div class="taskbar"><i></i><i></i><i></i><i></i><i></i></div>
+    </div></div>
+    <div class="cards" data-cards="c">
+      <div class="card" data-v="always"><h3><small>А</small>Всегда видна</h3><p>Линии всегда видны справа и стоят на том же расстоянии, что и остальные значки и края. В режиме чёлки их нет, остров при переходе в капсулу расширяется ровно на них. При наведении линии белеют, остров не раскрывается.</p><span class="pick">Выбрать</span></div>
+      <div class="card" data-v="hover"><h3><small>Б</small>При наведении</h3><p>В покое капсула выглядит как сейчас. Линии выезжают справа, только когда курсор над островом.</p><span class="pick">Выбрать</span></div>
+      <div class="card" data-v="tab"><h3><small>В</small>Язычок снаружи</h3><p>Ручка — маленький чёрный язычок, прилипший к правому боку капсулы. Появляется, когда курсор рядом. Сама капсула не меняется.</p><span class="pick">Выбрать</span></div>
+    </div>
+  </section>
+
+  <!-- ═════════════ 1d ═════════════ -->
+  <section class="sec" id="sec-d">
+    <h2>Уведомления вместо окон Windows</h2>
+    <p class="lead">Короткие сообщения, которые заменят системные окна Windows. Для смены раскладки есть три варианта, остальные пока в одном. Уведомление Telegram «N непрочитанных» удаляется совсем: остаются только сообщения от конкретных людей.</p>
+    <div class="toolbar">
+      <div class="grp"><span class="glbl">Смена раскладки</span><div class="seg" data-seg="d"><button data-v="flip">А · Крупные буквы</button><button data-v="list">Б · Список языков</button><button data-v="quiet">В · Тихо</button></div></div>
+    </div>
+    <div class="keys">
+      <button class="btn pri" data-ev="lay">Раскладка (Win+Пробел)</button>
+      <button class="btn" data-ev="caps">Caps Lock</button>
+      <button class="btn" data-ev="plug">Зарядка подключена</button>
+      <button class="btn" data-ev="unplug">Зарядка отключена</button>
+      <button class="btn" data-ev="mic">Микрофон</button>
+      <button class="btn" data-ev="vol">Громкость</button>
+      <button class="btn" data-ev="bri">Яркость</button>
+    </div>
+    <div class="stage" data-h="200"><div class="desk" id="d-desk">
+      <div class="isl" id="d-isl">
+        <div class="row col" id="d-col"></div>
+        <div class="ev row" id="d-ev"></div>
+      </div>
+    </div></div>
+    <div class="cards" data-cards="d">
+      <div class="card" data-v="flip"><h3><small>А</small>Крупные буквы</h3><p>Остров ненадолго расширяется: старая раскладка уезжает вверх, новая въезжает снизу, рядом название языка.</p><span class="pick">Выбрать</span></div>
+      <div class="card" data-v="list"><h3><small>Б</small>Список языков</h3><p>Показываются все установленные раскладки, белая подложка переезжает на новую. Удобно, если раскладок три и больше.</p><span class="pick">Выбрать</span></div>
+      <div class="card" data-v="quiet"><h3><small>В</small>Тихо</h3><p>Остров не раскрывается: буквы в свёрнутом виде просто меняются с короткой вспышкой.</p><span class="pick">Выбрать</span></div>
+    </div>
+    <div class="note"><b>Громкость и яркость</b> уже есть в Островке, здесь они для сравнения. Системное окно Windows с громкостью, яркостью и медиа будет скрыто. <b>Зарядка</b>: в уведомлении можно показать процент, хотя в свёрнутом виде цифр нет. Если не нужно, уберу.</div>
+  </section>
+
+  <div class="summary">
+    <code id="sum"></code>
+    <button class="btn pri" id="copy">Скопировать выбор</button>
+  </div>
+</div>
+
+<script>
+(() => {
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const store = {
+  get(k, d) { try { const v = localStorage.getItem('ostr-rework:' + k); return v === null ? d : v; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem('ostr-rework:' + k, v); } catch {} }
+};
+
+/* ───── scale the fixed-size desks to their stage ───── */
+function fit() {
+  $$('.stage').forEach(st => {
+    const desk = st.firstElementChild, h = +st.dataset.h, s = st.clientWidth / 820;
+    desk.style.transform = `scale(${s})`; desk.style.height = h + 'px'; st.style.height = (h * s) + 'px';
+  });
+}
+addEventListener('resize', fit);
+
+/* ───── tabs ───── */
+function showTab(t) {
+  $$('nav.tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === t));
+  $$('section.sec').forEach(s => s.classList.toggle('on', s.id === 'sec-' + t));
+  store.set('tab', t); fit();
+  // islands measure their content, which is zero while the section is hidden
+  sizeB(); sizeC(); sizeD();
+}
+$$('nav.tabs button').forEach(b => b.onclick = () => showTab(b.dataset.tab));
+
+/* ───── choices ───── */
+const pick = {
+  // defaults = the choices made on 2026-11-21
+  a: store.get('a', 'B'), b: store.get('b', 'lens'), bdup: store.get('bdup', 'same'),
+  c: store.get('c', 'always'), cplace: store.get('cplace', 'free'), cmode: 'capsule', d: store.get('d', 'flip')
+};
+const onPick = {};
+function setPick(k, v) {
+  pick[k] = v; if (k !== 'cmode') store.set(k, v);
+  $$(`[data-seg="${k}"] button`).forEach(b => b.setAttribute('aria-pressed', b.dataset.v === v));
+  $$(`[data-cards="${k}"] .card`).forEach(c => { const on = c.dataset.v === v; c.classList.toggle('sel', on); c.querySelector('.pick').textContent = on ? '✓ Выбрано' : 'Выбрать'; });
+  onPick[k] && onPick[k](v); summary();
+}
+$$('[data-seg]').forEach(seg => seg.addEventListener('click', e => { const b = e.target.closest('button'); if (b) setPick(seg.dataset.seg, b.dataset.v); }));
+$$('[data-cards]').forEach(cs => cs.addEventListener('click', e => { const c = e.target.closest('.card'); if (c) setPick(cs.dataset.cards, c.dataset.v); }));
+const NAMES = {
+  a: { A: 'А (справа вместе)', B: 'Б (по краям)', C: 'В (слитно)' },
+  b: { drum: 'А (барабан)', lens: 'Б (лупа)', frame: 'В (рамка)' },
+  bdup: { same: 'повтор', dots: 'точки', thumb: 'миниатюра' },
+  c: { always: 'А (всегда видна)', hover: 'Б (при наведении)', tab: 'В (язычок)' },
+  cplace: { free: 'куда угодно', top: 'вдоль верха', snap: 'магнит' },
+  d: { flip: 'А (крупные буквы)', list: 'Б (список)', quiet: 'В (тихо)' }
+};
+function summary() {
+  $('#sum').textContent = `1a: ${NAMES.a[pick.a]} · 1b: ${NAMES.b[pick.b]}, окна: ${NAMES.bdup[pick.bdup]} · 1c: ${NAMES.c[pick.c]}, ${NAMES.cplace[pick.cplace]} · 1d: ${NAMES.d[pick.d]}`;
+}
+$('#copy').onclick = async () => {
+  try { await navigator.clipboard.writeText($('#sum').textContent); $('#copy').textContent = 'Скопировано'; }
+  catch { const r = document.createRange(); r.selectNodeContents($('#sum')); getSelection().removeAllRanges(); getSelection().addRange(r); $('#copy').textContent = 'Выделено — Ctrl+C'; }
+  setTimeout(() => $('#copy').textContent = 'Скопировать выбор', 1600);
+};
+
+/* ───── shared island bits ───── */
+const sys = { lvl: 72, chg: false, lay: 'RU', mus: false };
+const LAYS = ['RU', 'EN'];
+const LAYNAME = { RU: 'Русская', EN: 'Английская', UK: 'Украинская' };
+const now = () => { const d = new Date(); return d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0'); };
+function batSvg(small) {
+  const w = small ? 21 : 23, h = small ? 10.5 : 11.5, lw = (w - 4.6) * Math.max(.06, sys.lvl / 100);
+  const cls = 'bat' + (sys.chg ? ' chg' : '') + (!sys.chg && sys.lvl <= 20 ? ' low' : '');
+  return `<span class="${cls}"><svg class="bolt" width="7" height="10" viewBox="0 0 7 10"><path d="M4.2 0 0 5.6h2.7L2.2 10 7 4.2H4.1z"/></svg>` +
+    `<svg width="${w + 3}" height="${h}" viewBox="0 0 ${w + 3} ${h}"><rect class="o" x=".65" y=".65" width="${w - 1.3}" height="${h - 1.3}" rx="3.2"/>` +
+    `<rect class="n" x="${w + .6}" y="${h / 2 - 2}" width="1.7" height="4" rx=".8"/><rect class="l" x="2.3" y="2.3" width="${lw.toFixed(1)}" height="${(h - 4.6).toFixed(1)}" rx="1.6"/></svg></span>`;
+}
+const kl = (style) => `<span class="kl ${style}" data-kl><span>${sys.lay}</span></span>`;
+const eq = '<span class="eq"><i></i><i></i><i></i><i></i><i></i></span>';
+function colHtml(v, mini) {
+  const t = `<span class="mid">${now()}</span>`;
+  const mus = sys.mus ? (mini ? eq : `<span class="grp2"><span class="cover"></span>${eq}</span>`) : '';
+  if (v === 'A') return mini ? `${sys.mus ? eq : ''}${t}${kl('box')}${batSvg(true)}`
+                             : `${mus}${t}<span class="grp2">${kl('box')}${batSvg()}</span>`;
+  if (v === 'B') return mini ? `${kl('txt')}${t}${sys.mus ? eq : ''}${batSvg(true)}`
+                             : `${kl('txt')}<span class="grp2">${sys.mus ? '<span class="cover"></span>' : ''}${t}${sys.mus ? eq : ''}</span>${batSvg()}`;
+  return `${sys.mus ? (mini ? eq : `<span class="cover"></span>`) : ''}${t}<span class="sepdot"></span>${kl('fill')}<span class="sepdot"></span>${batSvg(mini)}`;
+}
+// swap the layout letters in place with the slot animation instead of re-rendering
+function flipLayouts(prev) {
+  $$('[data-kl]').forEach(el => {
+    const old = el.firstElementChild, nu = document.createElement('span');
+    nu.textContent = sys.lay; nu.className = 'in'; el.appendChild(nu);
+    requestAnimationFrame(() => requestAnimationFrame(() => { old.className = 'out'; nu.className = ''; }));
+    setTimeout(() => old.remove(), 450);
+  });
+}
+
+/* ═════════════ 1a ═════════════ */
+function renderA() {
+  $('#a-col').innerHTML = colHtml(pick.a, false);
+  $('#a-mini').innerHTML = colHtml(pick.a, true);
+  renderSideIslands();
+}
+onPick.a = renderA;
+$('#a-lvl').oninput = e => { sys.lvl = +e.target.value; renderA(); };
+$('#a-chg').onclick = e => { sys.chg = !sys.chg; e.target.textContent = 'Зарядка: ' + (sys.chg ? 'вкл' : 'выкл'); renderA(); };
+$('#a-mus').onclick = e => { sys.mus = !sys.mus; e.target.textContent = 'Музыка: ' + (sys.mus ? 'вкл' : 'выкл'); renderA(); };
+function nextLayout() { sys.lay = LAYS[(LAYS.indexOf(sys.lay) + 1) % LAYS.length]; flipLayouts(); }
+$('#a-lay').onclick = nextLayout;
+setInterval(() => $$('.mid').forEach(m => m.textContent = now()), 5000);
+
+// the other sections use the chosen collapsed look
+function renderSideIslands() {
+  $('#b-colc').innerHTML = colHtml(pick.a, false);
+  // the handle is one more item of the row: same gap to its neighbour as between the other items
+  $('#c-colc').innerHTML = colHtml(pick.a, false) + '<span class="vdiv"></span><span class="hdl" id="c-hdl" title="Потяните, чтобы передвинуть · двойной клик — на место"><i></i><i></i></span>';
+  if (!$('#d-isl').classList.contains('evon')) $('#d-col').innerHTML = colHtml(pick.a, false);
+  sizeC(); sizeD();
+}
+
+/* ═════════════ 1b: Alt+Tab ═════════════ */
+const G = {
+  chrome: { bg: 'radial-gradient(circle at 50% 50%,#fff 0 16%,#4285f4 17% 28%,transparent 29%),conic-gradient(from -30deg,#ea4335 0 120deg,#fbbc05 0 240deg,#34a853 0)', t: '' },
+  explorer: { bg: 'linear-gradient(160deg,#ffd75e,#f2a516)', svg: '<path d="M3 7.5a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" fill="rgba(255,255,255,.25)"/>' },
+  tg: { bg: 'linear-gradient(160deg,#37bbfe,#1d93d2)', svg: '<path d="M4 11.5 19.5 5l-2.6 13.4-5-3.9-2.6 2.6.4-4.2 6.6-6.3-8.3 5.2z" fill="#fff" stroke="none"/>' },
+  figma: { bg: 'linear-gradient(160deg,#2c2c2c,#111)', t: '<span style="display:grid;grid-template-columns:12px 12px;gap:0"><i style="width:12px;height:12px;background:#f24e1e;border-radius:6px 0 0 6px"></i><i style="width:12px;height:12px;background:#ff7262;border-radius:0 6px 6px 0"></i><i style="width:12px;height:12px;background:#a259ff;border-radius:6px 0 0 6px"></i><i style="width:12px;height:12px;background:#1abcfe;border-radius:6px"></i><i style="width:12px;height:12px;background:#0acf83;border-radius:6px 0 6px 6px"></i></span>' },
+  ps: { bg: 'linear-gradient(160deg,#0b1d3a,#001e36)', t: '<span style="color:#31a8ff">Ps</span>' },
+  music: { bg: 'linear-gradient(160deg,#ffdb4d,#ffb800)', svg: '<path d="M9 18V6l10-2v12" stroke="#000"/><circle cx="6.5" cy="18" r="2.5" stroke="#000"/><circle cx="16.5" cy="16" r="2.5" stroke="#000"/>' },
+  claude: { bg: 'linear-gradient(160deg,#e08b62,#c4613a)', svg: '<path d="M12 4v16M4 12h16M6.3 6.3l11.4 11.4M17.7 6.3 6.3 17.7"/>' },
+  painter: { bg: 'linear-gradient(160deg,#0b2b1f,#06170f)', t: '<span style="color:#5be38f">Pt</span>' }
+};
+const WINS = [
+  { app: 'claude' }, { app: 'chrome', k: 0 }, { app: 'tg' }, { app: 'figma' }, { app: 'explorer', k: 0 },
+  { app: 'chrome', k: 1 }, { app: 'ps' }, { app: 'music' }, { app: 'explorer', k: 1 }, { app: 'painter' }
+];
+const count = a => WINS.filter(w => w.app === a).length;
+const items = $('#b-items');
+WINS.forEach((w, i) => {
+  const g = G[w.app], n = count(w.app);
+  const el = document.createElement('div'); el.className = 'tile'; el.dataset.i = i;
+  el.innerHTML = `<div class="ap" style="background:${g.bg}">${g.svg ? `<svg viewBox="0 0 24 24">${g.svg}</svg>` : g.t}</div>` +
+    (n > 1 ? `<div class="wd">${Array.from({ length: n }, (_, j) => `<i class="${j === w.k ? 'on' : ''}"></i>`).join('')}</div>` : '');
+  items.appendChild(el);
+});
+const tiles = $$('.tile', items);
+const R = { pos: 0, target: 0, vel: 0, open: false, raf: 0, last: 0 };
+const isl = $('#b-isl'), rib = $('#b-rib');
+function geo() {
+  const thumb = pick.bdup === 'thumb';
+  return { w: pick.b === 'drum' ? 600 : 620, h: thumb ? 236 : 150, rTop: thumb ? 104 : 0 };
+}
+function layoutRib() {
+  const g = geo(); rib.style.top = g.rTop + 'px'; rib.style.height = (g.h - g.rTop) + 'px';
+  isl.classList.toggle('th', pick.bdup === 'thumb');
+  if (R.open) { isl.style.width = g.w + 'px'; isl.style.height = g.h + 'px'; }
+}
+function place() {
+  const sel = Math.round(R.target);
+  tiles.forEach((el, i) => {
+    const d = i - R.pos; let x = 0, z = 0, ry = 0, s = 1, o = 1;
+    if (pick.b === 'drum') {
+      const th = d * .34; if (Math.abs(th) > 1.5) { el.style.opacity = 0; return; }
+      x = Math.sin(th) * 330; z = (Math.cos(th) - 1) * 330; ry = th * 57.3 * .8; o = Math.max(0, Math.cos(th) * 1.5 - .45); s = 1.02;
+    } else if (pick.b === 'lens') {
+      const a = Math.abs(d); x = Math.sign(d) * (a * 66 + 22 * Math.min(1, a)); s = .7 + .42 * Math.exp(-d * d * 1.3); o = Math.max(0, 1 - a * .19);
+    } else {
+      const a = Math.abs(d); x = d * 88; s = .8 + .2 * Math.max(0, 1 - a); o = Math.max(0, 1 - a * .17);
+    }
+    el.style.transform = `translate3d(${x.toFixed(1)}px,0,${z.toFixed(1)}px) rotateY(${(-ry).toFixed(1)}deg) scale(${s.toFixed(3)})`;
+    el.style.opacity = o.toFixed(3); el.style.zIndex = 100 - Math.round(Math.abs(d) * 10);
+  });
+  const w = WINS[sel]; if (w) $('#b-thumb .bar').style.background = G[w.app].bg.includes('gradient(160deg') ? G[w.app].bg : '#3a3a48';
+}
+function step(t) {
+  const dt = Math.min(.033, (t - (R.last || t)) / 1000); R.last = t;
+  const k = 260, c = 30; R.vel += ((R.target - R.pos) * k - R.vel * c) * dt; R.pos += R.vel * dt;
+  if (Math.abs(R.target - R.pos) < .0008 && Math.abs(R.vel) < .002) { R.pos = R.target; place(); R.raf = 0; R.last = 0; return; }
+  place(); R.raf = requestAnimationFrame(step);
+}
+const kick = () => { if (!R.raf) R.raf = requestAnimationFrame(step); };
+const clampI = i => Math.max(0, Math.min(WINS.length - 1, i));
+function openRib() {
+  R.open = true; R.pos = 0; R.vel = 0; R.target = 1; isl.classList.add('open'); layoutRib(); place();
+  setTimeout(kick, 140); keyHint(true);
+}
+function move(dir) {
+  if (!R.open) { openRib(); if (dir < 0) { R.target = WINS.length - 1; } return; }
+  R.target = clampI(Math.round(R.target) + dir); kick();
+}
+function closeRib(switchTo) {
+  if (!R.open) return;
+  const sel = Math.round(R.target);
+  if (switchTo) { tiles[sel].classList.remove('go'); void tiles[sel].offsetWidth; tiles[sel].classList.add('go'); }
+  setTimeout(() => {
+    R.open = false; isl.classList.remove('open'); isl.style.width = '330px'; isl.style.height = '36px'; sizeB();
+    if (switchTo) {
+      const w = WINS.splice(sel, 1)[0]; WINS.unshift(w);
+      const t = tiles.splice(sel, 1)[0]; tiles.unshift(t);
+      toast('#b-toast', 'Переключено на окно');
+    } else toast('#b-toast', 'Отменено');
+    keyHint(false);
+  }, switchTo ? 260 : 0);
+}
+function sizeB() { if (!R.open) { const c = $('#b-colc'); if (c.scrollWidth) isl.style.width = Math.max(200, c.scrollWidth) + 'px'; } }
+onPick.b = () => { layoutRib(); place(); };
+onPick.bdup = v => { rib.dataset.dup = v; layoutRib(); place(); };
+function keyHint(alt) { $('#k-alt').classList.toggle('down', alt); $('#k-hint').textContent = alt ? 'Alt зажат · Tab — дальше, Enter — отпустить' : 'Кликните сюда и нажмите Tab'; }
+function flashKey() { const k = $('#k-tab'); k.classList.add('down'); setTimeout(() => k.classList.remove('down'), 140); }
+const bdesk = $('#b-desk');
+bdesk.addEventListener('keydown', e => {
+  if (e.key === 'Tab') { e.preventDefault(); flashKey(); move(e.shiftKey ? -1 : 1); }
+  else if (e.key === 'ArrowRight') { e.preventDefault(); move(1); }
+  else if (e.key === 'ArrowLeft') { e.preventDefault(); move(-1); }
+  else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); closeRib(true); }
+  else if (e.key === 'Escape') { e.preventDefault(); closeRib(false); }
+});
+bdesk.addEventListener('wheel', e => { if (!R.open) return; e.preventDefault(); move((e.deltaY || e.deltaX) > 0 ? 1 : -1); }, { passive: false });
+items.addEventListener('click', e => { const t = e.target.closest('.tile'); if (!t || !R.open) return; R.target = tiles.indexOf(t); kick(); setTimeout(() => closeRib(true), 280); });
+$('#b-tab').onclick = () => { flashKey(); move(1); bdesk.focus(); };
+$('#b-stab').onclick = () => { move(-1); bdesk.focus(); };
+$('#b-rel').onclick = () => closeRib(true);
+$('#b-esc').onclick = () => closeRib(false);
+function toast(sel, txt) { const t = $(sel); t.textContent = txt; t.classList.add('on'); clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('on'), 1400); }
+
+/* ═════════════ 1c: movable capsule ═════════════ */
+const cd = $('#c-desk'), ci = $('#c-isl'), ctab = $('#c-tab');
+const C = { x: 0, y: 8, w: 0, h: 36, homeX: 0, drag: null, big: false, hovT: 0 };
+const DW = 820, DH = 440 - 34; // the taskbar is off limits
+function sizeC() {
+  const cc = $('#c-colc'); if (!cc.scrollWidth) return;
+  if (pick.cmode === 'notch') return; // measured in capsule mode only, notch derives from it
+  C.w = C.wCaps = cc.scrollWidth;
+  if (!C.big) { ci.style.width = C.w + 'px'; ci.style.height = '36px'; }
+  C.homeX = (DW - C.w) / 2; if (!C.moved) C.x = C.homeX;
+  posC();
+}
+function posC() {
+  const notch = pick.cmode === 'notch';
+  const x = notch ? C.homeX : C.x, y = notch ? 0 : C.y;
+  let L = x, T = y;
+  if (C.big) { const bw = 440, bh = 170; L = Math.max(8, Math.min(DW - bw - 8, x + C.w / 2 - bw / 2)); T = y + bh + 8 > DH ? Math.max(8, y + 36 - bh) : y; }
+  ci.style.left = L + 'px'; ci.style.top = T + 'px';
+  ci.style.borderRadius = notch ? (C.big ? '0 0 32px 32px' : '0 0 18px 18px') : (C.big ? '32px' : '18px');
+  ctab.style.left = (x + C.w - 2) + 'px'; ctab.style.top = (y + 5) + 'px';
+}
+const SPOTS = () => [[C.homeX, 8], [16, 8], [DW - C.w - 16, 8], [C.homeX, DH - 52], [16, DH - 52], [DW - C.w - 16, DH - 52]];
+function nearestSpot(x, y) { return SPOTS().reduce((b, s) => Math.hypot(s[0] - x, s[1] - y) < Math.hypot(b[0] - x, b[1] - y) ? s : b); }
+function deskPoint(e) { const r = cd.getBoundingClientRect(), s = r.width / DW; return [(e.clientX - r.left) / s, (e.clientY - r.top) / s]; }
+function startDrag(e, el) {
+  if (pick.cmode === 'notch') return;
+  e.preventDefault(); e.stopPropagation(); clearTimeout(C.hovT); setBig(false);
+  const [px, py] = deskPoint(e); C.drag = { dx: px - C.x, dy: py - C.y }; C.moved = true;
+  ci.classList.remove('anim'); ci.classList.add('drag'); ctab.classList.add('drag');
+  try { el.setPointerCapture(e.pointerId); } catch {}
+}
+function moveDrag(e) {
+  if (!C.drag) return;
+  const [px, py] = deskPoint(e);
+  C.x = Math.max(4, Math.min(DW - C.w - 4, px - C.drag.dx));
+  C.y = pick.cplace === 'top' ? 8 : Math.max(4, Math.min(DH - 40, py - C.drag.dy));
+  if (pick.cplace === 'snap') { const s = nearestSpot(C.x, C.y), g = $('#c-ghost'); g.style.left = s[0] + 'px'; g.style.top = s[1] + 'px'; g.style.width = C.w + 'px'; g.style.height = '36px'; g.classList.add('on'); }
+  posC();
+}
+function endDrag() {
+  if (!C.drag) return; C.drag = null; ci.classList.remove('drag'); ctab.classList.remove('drag'); $('#c-ghost').classList.remove('on');
+  if (pick.cplace === 'snap') { const s = nearestSpot(C.x, C.y); ci.classList.add('anim'); C.x = s[0]; C.y = s[1]; posC(); }
+  toast('#c-toast', 'Положение запомнено');
+}
+function home() { ci.classList.add('anim'); C.moved = false; C.x = C.homeX; C.y = 8; posC(); toast('#c-toast', 'На месте'); }
+cd.addEventListener('pointerdown', e => { const h = e.target.closest('.hdl') || e.target.closest('#c-tab'); if (h) startDrag(e, h); });
+cd.addEventListener('pointermove', e => {
+  moveDrag(e);
+  if (pick.c === 'tab' && !C.drag) { const [px, py] = deskPoint(e); const near = px > C.x - 20 && px < C.x + C.w + 40 && py > C.y - 20 && py < C.y + 56; cd.classList.toggle('near', near); }
+});
+addEventListener('pointerup', endDrag);
+cd.addEventListener('dblclick', e => { if (e.target.closest('.hdl') || e.target.closest('#c-tab')) home(); });
+function setBig(on) {
+  if (C.big === on) return; C.big = on; ci.classList.toggle('big', on); ci.classList.add('anim');
+  ci.style.width = (on ? 440 : C.w) + 'px'; ci.style.height = (on ? 170 : 36) + 'px'; posC();
+}
+// hovering the island body opens it after a short delay; the handle never does
+ci.addEventListener('pointerover', e => {
+  clearTimeout(C.hovT); if (C.drag) return;
+  if (e.target.closest('.hdl')) return;
+  C.hovT = setTimeout(() => setBig(true), 450);
+});
+ci.addEventListener('pointerout', e => { if (e.relatedTarget && ci.contains(e.relatedTarget) && !e.relatedTarget.closest('.hdl')) return; clearTimeout(C.hovT); if (e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest('.hdl')) return; setBig(false); });
+onPick.c = v => { cd.dataset.v = v; sizeC(); };
+onPick.cplace = v => { if (v === 'top') { ci.classList.add('anim'); C.y = 8; posC(); } if (v === 'snap') { const s = nearestSpot(C.x, C.y); ci.classList.add('anim'); C.x = s[0]; C.y = s[1]; posC(); } };
+// notch ↔ capsule: the island grows or shrinks by exactly the handle's slot (12px lines + 16px gap)
+onPick.cmode = v => {
+  if (C.wCaps === undefined) { C.wCaps = C.w; }
+  cd.dataset.mode = v; ci.classList.add('anim');
+  if (!C.wCaps) return;
+  C.w = v === 'notch' ? C.wCaps - 28 : C.wCaps; C.homeX = (DW - C.w) / 2;
+  if (!C.big) ci.style.width = C.w + 'px'; posC();
+};
+
+/* ═════════════ 1d: events ═════════════ */
+const di = $('#d-isl'), dcol = $('#d-col'), dev = $('#d-ev');
+let dT = 0;
+function sizeD() { if (!di.classList.contains('evon') && dcol.scrollWidth) di.style.width = Math.max(150, dcol.scrollWidth) + 'px'; }
+function showEv(html, w, h = 56, ms = 1900) {
+  clearTimeout(dT); dev.innerHTML = html; di.classList.add('evon');
+  dcol.classList.remove('on'); dev.classList.add('on');
+  di.style.width = w + 'px'; di.style.height = h + 'px'; di.style.borderRadius = (h / 2) + 'px';
+  dT = setTimeout(() => {
+    di.classList.remove('evon'); dev.classList.remove('on'); dcol.classList.add('on');
+    dcol.innerHTML = colHtml(pick.a, false); di.style.height = '36px'; di.style.borderRadius = '18px'; sizeD();
+  }, ms);
+}
+const ICON = {
+  caps: '<path d="M12 5 5 12h4v6h6v-6h4z"/>',
+  mic: '<rect x="9" y="3.5" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v2.5"/>',
+  micoff: '<rect x="9" y="3.5" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v2.5M4 4l16 16"/>',
+  vol: '<path d="M4 9.5h3.4L12 6v12l-4.6-3.5H4z" fill="#fff"/><path d="M15.5 9.3a3.8 3.8 0 0 1 0 5.4"/><path d="M18.2 6.8a7.4 7.4 0 0 1 0 10.4"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/>',
+  plug: '<path d="M9 3v5M15 3v5M6.5 8h11v3a5.5 5.5 0 0 1-11 0zM12 16.5V21"/>'
+};
+const gl = (k, bg) => `<span class="gl" style="background:${bg}"><svg viewBox="0 0 24 24">${ICON[k]}</svg></span>`;
+let caps = false, mic = true;
+const EV = {
+  lay() {
+    const prev = sys.lay; sys.lay = LAYS[(LAYS.indexOf(sys.lay) + 1) % LAYS.length];
+    if (pick.d === 'quiet') {
+      if (di.classList.contains('evon')) { clearTimeout(dT); di.classList.remove('evon'); dev.classList.remove('on'); dcol.classList.add('on'); di.style.height = '36px'; di.style.borderRadius = '18px'; }
+      dcol.innerHTML = colHtml(pick.a, false).replace(`<span>${sys.lay}</span>`, `<span>${prev}</span>`); sizeD();
+      flipLayouts(); const k = $('[data-kl]', dcol); if (k) { k.classList.remove('flash'); void k.offsetWidth; k.classList.add('flash'); }
+      renderA(); return;
+    }
+    renderA();
+    if (pick.d === 'flip') {
+      // letters and the language name roll over together, in one motion
+      showEv(`<span class="lay-big" id="lb"><span>${prev}</span></span><span class="tx"><b class="lay-big lay-name" id="ln"><span>${LAYNAME[prev]}</span></b><span>раскладка клавиатуры</span></span>`, 270);
+      const roll = (box, txt) => { const o = box.firstElementChild, n = document.createElement('span'); n.textContent = txt; n.className = 'in'; box.appendChild(n); return () => { o.className = 'out'; n.className = ''; }; };
+      const a = roll($('#lb'), sys.lay), b = roll($('#ln'), LAYNAME[sys.lay]);
+      setTimeout(() => { a(); b(); }, 220);
+    } else {
+      const list = ['RU', 'EN', 'UK'];
+      showEv(`<span class="lay-list" id="ll"><span class="pill"></span>${list.map(l => `<b data-l="${l}">${l}</b>`).join('')}</span>`, 190);
+      const ll = $('#ll'), pill = $('.pill', ll), go = l => { const b = $(`[data-l="${l}"]`, ll); pill.style.left = b.offsetLeft + 'px'; pill.style.width = b.offsetWidth + 'px'; $$('b', ll).forEach(x => x.classList.toggle('on', x === b)); };
+      requestAnimationFrame(() => { pill.style.transition = 'none'; go(prev); requestAnimationFrame(() => { pill.style.transition = ''; setTimeout(() => go(sys.lay), 200); }); });
+    }
+  },
+  caps() { caps = !caps; showEv(`${gl('caps', caps ? '#2f7bff' : 'rgba(255,255,255,.14)')}<span class="tx"><b>Caps Lock</b><span>${caps ? 'включён' : 'выключен'}</span></span>`, 210); },
+  plug() { sys.chg = true; $('#a-chg').textContent = 'Зарядка: вкл'; renderA(); showEv(`${batSvg().replace('class="bat', 'style="transform:scale(1.5);margin:0 8px" class="bat')}<span class="tx"><b>Заряжается</b></span>`, 200); },
+  unplug() { sys.chg = false; $('#a-chg').textContent = 'Зарядка: выкл'; renderA(); showEv(`${batSvg().replace('class="bat', 'style="transform:scale(1.5);margin:0 8px" class="bat')}<span class="tx"><b>От батареи</b></span>`, 200); },
+  mic() { mic = !mic; showEv(`${gl(mic ? 'mic' : 'micoff', mic ? 'rgba(255,255,255,.14)' : '#ff4d5e')}<span class="tx"><b>Микрофон ${mic ? 'включён' : 'выключен'}</b></span>`, 250); },
+  vol() { showEv(`${gl('vol', 'rgba(255,255,255,.14)')}<span class="lvlbar"><i style="width:64%"></i></span>`, 210, 48); },
+  bri() { showEv(`${gl('sun', 'rgba(255,255,255,.14)')}<span class="lvlbar"><i style="width:80%"></i></span>`, 210, 48); }
+};
+$$('[data-ev]').forEach(b => b.onclick = () => EV[b.dataset.ev]());
+onPick.d = () => {};
+
+/* ───── start ───── */
+dcol.classList.add('on');
+rib.dataset.dup = pick.bdup; rib.dataset.v = pick.b;
+const _b = onPick.b; onPick.b = v => { rib.dataset.v = v; _b(v); };
+cd.dataset.mode = 'capsule';
+Object.keys(pick).forEach(k => setPick(k, pick[k]));
+showTab(store.get('tab', 'a'));
+fit(); place(); sizeB();
+if (document.fonts) document.fonts.ready.then(() => { sizeB(); sizeC(); sizeD(); });
+})();
+</script>
+</body>
+</html>

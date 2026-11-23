@@ -3,8 +3,13 @@ namespace Ostrovok;
 static class Program
 {
     [STAThread]
-    static void Main()
+    static void Main(string[] args)
     {
+        if (args.Length == 2 && args[0] == "--taskbar-guard" && int.TryParse(args[1], out int owner))
+        {
+            TaskbarGuard.Watch(owner);
+            return;
+        }
         using var mutex = new Mutex(true, "Ostrovok.SingleInstance.v1", out bool created);
         if (!created) return;
 

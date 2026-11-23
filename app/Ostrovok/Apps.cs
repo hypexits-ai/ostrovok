@@ -38,6 +38,25 @@ class WindowTracker
         return known.Values.OrderBy(w => w.Seen).ToList();
     }
 
+    /// <summary>The same windows in Alt+Tab order: the one in front first, then by how recently they were active
+    /// (EnumWindows walks the z-order, top to bottom).</summary>
+    public List<WinInfo> ByRecency()
+    {
+        var order = new List<IntPtr>();
+        Native.EnumWindows((h, _) => { if (IsAppWindow(h)) order.Add(h); return true; }, IntPtr.Zero);
+        var fg = Native.GetForegroundWindow();
+        int at = order.IndexOf(fg);
+        if (at > 0) { order.RemoveAt(at); order.Insert(0, fg); }
+        var list = new List<WinInfo>();
+        foreach (var h in order)
+        {
+            if (!known.TryGetValue(h, out var w)) { w = Describe(h); w.Seen = seq++; known[h] = w; }
+            w.Title = Native.Title(h);
+            list.Add(w);
+        }
+        return list;
+    }
+
     bool IsAppWindow(IntPtr h)
     {
         if (h == Self || !Native.IsWindowVisible(h)) return false;
@@ -62,10 +81,11 @@ class WindowTracker
         if (aumid != null)
         {
             var item = "shell:AppsFolder\\" + aumid;
-            icon = ShellIcons.Icon(item);
+            icon = ShellIcons.Icon(item, 96);
             if (icon != null) name = ShellIcons.DisplayName(item);
         }
-        if (icon == null && exe != null) icon = ShellIcons.Icon(exe);
+        // 96px: crisp in the big Alt+Tab ribbon on scaled screens too
+        if (icon == null && exe != null) icon = ShellIcons.Icon(exe, 96);
         if (string.IsNullOrWhiteSpace(name) && exe != null)
         {
             if (exe.EndsWith("ApplicationFrameHost.exe", StringComparison.OrdinalIgnoreCase)) name = title;
@@ -89,12 +109,13 @@ class WindowTracker
         if (Native.IsWindow(h)) Native.PostMessage(h, Native.WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
     }
 
-    /// <summary>Taskbar-style click: bring the window forward, or minimise it if it is already in front.</summary>
-    public static void Activate(IntPtr h)
+    /// <summary>Taskbar-style click: bring the window forward, or minimise it if it is already in front.
+    /// Alt+Tab passes toggle = false: a window already in front just stays there.</summary>
+    public static void Activate(IntPtr h, bool toggle = true)
     {
         if (!Native.IsWindow(h)) return;
         var fg = Native.GetForegroundWindow();
-        if (fg == h && !Native.IsIconic(h)) { Native.ShowWindow(h, Native.SW_MINIMIZE); return; }
+        if (fg == h && !Native.IsIconic(h)) { if (toggle) Native.ShowWindow(h, Native.SW_MINIMIZE); return; }
         if (Native.IsIconic(h)) Native.ShowWindow(h, Native.SW_RESTORE);
 
         uint fgThread = Native.GetWindowThreadProcessId(fg, out _);

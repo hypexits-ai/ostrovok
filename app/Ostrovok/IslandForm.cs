@@ -15,9 +15,9 @@ namespace Ostrovok;
 /// </summary>
 sealed class IslandForm : Form
 {
-    // The window spans the top of the primary screen so cells can split off to either side or below;
-    // only the island and its cells are clickable (window region), everything else passes through.
-    const int MaxCssHeight = 820;
+    // The window spans the primary screen's work area, so the capsule can be dragged anywhere and cells can
+    // split off to either side, below or above; only the island and its cells are clickable (window region),
+    // everything else passes through.
 
     readonly WebView2 web;
     readonly MediaWatcher media = new();
@@ -48,6 +48,14 @@ sealed class IslandForm : Form
     NotifyIcon tray;
     Native.WinEventProc fgProc;
     IntPtr fgHook, previousForeground;
+    // Alt+Tab: the windows in the ribbon and the selected one (the host keeps the truth, the page draws it)
+    KeyboardHook keys;
+    List<WinInfo> altList = new();
+    int altSel;
+    // keyboard layout, Caps Lock, microphone: the last state sent, to report only changes
+    int layoutLang;
+    IntPtr layoutFg;
+    bool? capsOn, micMuted;
 
     bool ready, hiddenForFullscreen, cursorInside, procsBusy, btBusy;
     float scale = 1f;
@@ -101,7 +109,11 @@ sealed class IslandForm : Form
     {
         scale = DeviceDpi / 96f;
         var screen = Screen.PrimaryScreen.Bounds;
-        int h = Math.Min((int)Math.Round(MaxCssHeight * scale), screen.Height - (int)(60 * scale));
+        var work = Screen.PrimaryScreen.WorkingArea;
+        int h = work.Bottom - screen.Y;
+        // never the whole monitor: a top-most window that covers all of it counts as a full-screen app,
+        // and Windows would push the taskbar behind it whenever the island takes the keyboard
+        if (h >= screen.Height) h = screen.Height - 1;
         Bounds = new Rectangle(screen.X, screen.Y, screen.Width, h);
         cssWidth = (int)(screen.Width / scale); cssHeight = (int)(h / scale);
         if (regionCss.Count == 0) regionCss.Add(new Rectangle((cssWidth - 340) / 2, 0, 340, 56));
@@ -198,11 +210,36 @@ sealed class IslandForm : Form
         try { wifi = new WifiHub(); } catch (Exception ex) { Log.Write(ex); }
 
         media.Changed += () => BeginInvoke(PushMedia);
-        brightness.Changed += (ok, v) => { if (IsHandleCreated) BeginInvoke(() => Post(new { t = "bright", ok, v })); };
+        bool brightnessKnown = brightness.Supported && brightness.Value >= 0;
+        brightness.Changed += (ok, v) => {
+            if (IsHandleCreated) BeginInvoke(() => {
+                bool external = ok && brightnessKnown;
+                brightnessKnown = ok;
+                Post(new { t = "bright", ok, v, ext = external });
+                if (external && settings.OwnFlyouts && ready && Visible && !hiddenForFullscreen)
+                {
+                    systemFlyoutUntil = Environment.TickCount64 + 800;
+                    HideSystemFlyout();
+                }
+            });
+        };
         media.TimelineChanged += () => BeginInvoke(PushMedia);
         radios.Changed += () => BeginInvoke(PushRadios);
-        sys.Start();
+        // (the CPU/GPU monitor is not started: the island no longer shows processor or graphics load)
         _ = InitAsync();
+
+        keys = new KeyboardHook(this) { CanTakeAltTab = () => settings.AltTab && ready && Visible && !hiddenForFullscreen };
+        keys.Started += AltStart;
+        keys.Stepped += AltStep;
+        keys.Committed += AltCommit;
+        keys.Cancelled += AltCancel;
+        keys.CapsPressed += () => PollCaps();
+        // volume keys always (the island shows the level); media keys only while there is a player to send them to
+        keys.TakeMediaKey = vk => settings.OwnFlyouts && ready && Visible && !hiddenForFullscreen &&
+            (vk <= KeyboardHook.VK_VOLUME_UP || media.Has);
+        keys.MediaKey += OnMediaKey;
+        keys.CanSwitchLayout = () => settings.OwnFlyouts && ready && Visible && !hiddenForFullscreen;
+        keys.Install();
         BeginInvoke(async () => { await Task.Delay(6000); search.EnsureApps(); });   // after the start-up slide: indexing holds this thread
 
         fgProc = (_, _, _, _, _, _, _) => BeginInvoke(PushWindows);
@@ -231,7 +268,13 @@ sealed class IslandForm : Form
             {
                 case "ready":
                     ready = true;
+                    if (settings.OwnFlyouts) flyoutsEnabled.Set();
+                    if (taskbarGuard == null || taskbarGuard.HasExited)
+                        taskbarGuard = Process.Start(Application.ExecutablePath, "--taskbar-guard " + Environment.ProcessId);
                     PushAll();
+                    break;
+                case "app.menu":
+                    tray?.ContextMenuStrip?.Show(Cursor.Position);
                     break;
                 case "log":
                     Log.Write("page: " + m.GetProperty("msg").GetString());
@@ -242,6 +285,21 @@ sealed class IslandForm : Form
                 case "mode":
                     settings.Mode = m.GetProperty("mode").GetString();
                     settings.Save();
+                    break;
+                case "pos":
+                    if (m.TryGetProperty("x", out var px) && m.TryGetProperty("y", out var py))
+                    { settings.PosX = Math.Round(px.GetDouble(), 1); settings.PosY = Math.Round(py.GetDouble(), 1); }
+                    else { settings.PosX = null; settings.PosY = null; }
+                    settings.Save();
+                    break;
+                case "alttab.pick":
+                    if (altList.Count == 0) break;
+                    altSel = Math.Clamp(m.GetProperty("i").GetInt32(), 0, altList.Count - 1);
+                    keys.End();
+                    AltCommit();
+                    break;
+                case "alttab.step":
+                    AltStep(m.GetProperty("d").GetInt32());
                     break;
                 case "tg.open":
                     telegram.Open();
@@ -385,7 +443,14 @@ sealed class IslandForm : Form
     {
         favorites = Favorites.Load();
         PushFavorites();
-        Post(new { t = "config", wifi = wifi?.Available ?? false, city = settings.City, idleMinutes = settings.IdleMinutes, mode = settings.Mode });
+        Post(new
+        {
+            t = "config", wifi = wifi?.Available ?? false, city = settings.City, idleMinutes = settings.IdleMinutes, mode = settings.Mode,
+            pos = settings.PosX is double x && settings.PosY is double y ? new { x, y } : null
+        });
+        PollLayout(true);
+        PollCaps(true);
+        PollMic(true);
         lastWindowsKey = "";
         gameSent = fsSent = false;   // a reloaded page starts without the game state: send it again
         PushWindows();
@@ -685,10 +750,19 @@ sealed class IslandForm : Form
         catch (Exception ex) { Log.Write(ex); }
     }
 
-    void PushVolume(float level, bool muted, bool external) => Post(new { t = "vol", v = level, mute = muted, ext = external });
+    void PushVolume(float level, bool muted, bool external)
+    {
+        if (external && settings.OwnFlyouts && ready && Visible && !hiddenForFullscreen)
+        {
+            systemFlyoutUntil = Environment.TickCount64 + 1000;
+            HideSystemFlyout();
+        }
+        Post(new { t = "vol", v = level, mute = muted, ext = external });
+    }
 
     void PushRadios() => Post(new { t = "radios", wifi = radios.WifiOn, bt = radios.BtOn });
 
+    /// <summary>Battery level for the low-battery warning (processor and graphics load are no longer shown).</summary>
     void PushSys()
     {
         var ps = SystemInformation.PowerStatus;
@@ -696,16 +770,122 @@ sealed class IslandForm : Form
         var msg = new
         {
             t = "sys",
-            temp = sys.Temp is double d ? (int?)Math.Round(d) : null,
-            load = (int)Math.Round(sys.Load),
-            gpu = sys.Gpu is double g ? (int?)Math.Round(g) : null,
             batt = hasBattery ? (int?)Math.Round(ps.BatteryLifePercent * 100) : null,
             charging = ps.PowerLineStatus == PowerLineStatus.Online
         };
-        var key = $"{msg.temp}/{msg.load}/{msg.gpu}/{msg.batt}/{msg.charging}";
+        var key = $"{msg.batt}/{msg.charging}";
         if (key == lastSysKey) return;
         lastSysKey = key;
         Post(msg);
+    }
+
+    // ───────────── Alt+Tab ─────────────
+
+    void AltStart(int dir)
+    {
+        try
+        {
+            altList = windows.ByRecency();
+            if (altList.Count == 0) { keys.End(); return; }
+            // as in Windows: the first Tab already points at the previous window, Shift+Tab at the last one
+            altSel = altList.Count == 1 ? 0 : dir > 0 ? 1 : altList.Count - 1;
+            Post(new { t = "alttab", on = true, sel = altSel, list = altList.Select(w => new { id = w.Handle.ToString(), name = w.Name, icon = w.Icon }) });
+        }
+        catch (Exception ex) { Log.Write(ex); keys.End(); altList = new(); }
+    }
+
+    void AltStep(int d)
+    {
+        int n = altList.Count;
+        if (n == 0) return;
+        altSel = ((altSel + d) % n + n) % n;
+        Post(new { t = "alttab", delta = d, sel = altSel });
+    }
+
+    void AltCommit()
+    {
+        if (altList.Count == 0) return;
+        var w = altList[Math.Clamp(altSel, 0, altList.Count - 1)];
+        altList = new();
+        Post(new { t = "alttab", on = false, picked = true });
+        try { WindowTracker.Activate(w.Handle, toggle: false); } catch (Exception ex) { Log.Write(ex); }
+        BeginInvoke(PushWindows);
+    }
+
+    void AltCancel()
+    {
+        altList = new();
+        Post(new { t = "alttab", on = false, picked = false });
+    }
+
+    // ───────────── volume and media keys (instead of the Windows flyout) ─────────────
+
+    void OnMediaKey(uint vk)
+    {
+        try
+        {
+            switch (vk)
+            {
+                case KeyboardHook.VK_VOLUME_UP or KeyboardHook.VK_VOLUME_DOWN:
+                    // the same 2% steps as Windows; a step also lifts the mute
+                    float level = MathF.Round(audio.Level * 50) / 50 + (vk == KeyboardHook.VK_VOLUME_UP ? .02f : -.02f);
+                    audio.SetLevel(Math.Clamp(level, 0f, 1f));
+                    if (audio.Muted && vk == KeyboardHook.VK_VOLUME_UP) audio.SetMuted(false);
+                    PushVolume(audio.Level, audio.Muted, true);
+                    break;
+                case KeyboardHook.VK_VOLUME_MUTE:
+                    audio.SetMuted(!audio.Muted);
+                    PushVolume(audio.Level, audio.Muted, true);
+                    break;
+                case KeyboardHook.VK_MEDIA_PLAY_PAUSE: _ = media.Command("play"); break;
+                case KeyboardHook.VK_MEDIA_NEXT: _ = media.Command("next"); break;
+                case KeyboardHook.VK_MEDIA_PREV: _ = media.Command("prev"); break;
+                case KeyboardHook.VK_MEDIA_STOP: _ = media.Command("pause"); break;
+            }
+        }
+        catch (Exception ex) { Log.Write("media key: " + ex.Message); }
+    }
+
+    // ───────────── keyboard layout, Caps Lock, microphone ─────────────
+
+    void PollLayout(bool force = false)
+    {
+        try
+        {
+            var fg = Native.GetForegroundWindow();
+            int lang = KeyboardLayout.Current(fg);
+            if (lang == 0) return;
+            if (lang == layoutLang && !force) { layoutFg = fg; return; }
+            // a switch inside the same window gets a notification; another window simply having its own layout does not
+            bool ev = !force && layoutLang != 0 && fg == layoutFg;
+            layoutLang = lang; layoutFg = fg;
+            var (code, name) = KeyboardLayout.Describe(lang);
+            if (code == null) return;
+            var languages = InputLanguage.InstalledInputLanguages.Cast<InputLanguage>()
+                .Select(input => KeyboardLayout.Describe(input.Culture.LCID).code)
+                .Where(label => label != null).Append(code).Distinct().ToArray();
+            Post(new { t = "layout", code, name, ev, languages });
+        }
+        catch (Exception ex) { Log.Write("layout: " + ex.Message); }
+    }
+
+    void PollCaps(bool force = false)
+    {
+        bool on = (Native.GetKeyState(KeyboardHook.VK_CAPITAL) & 1) != 0;
+        if (capsOn == on && !force) return;
+        bool ev = capsOn != null && !force;
+        capsOn = on;
+        Post(new { t = "caps", on, ev });
+    }
+
+    void PollMic(bool force = false)
+    {
+        bool? m = null;
+        try { m = audioHub?.MicMuted(); } catch { }
+        if (m == null || (m == micMuted && !force)) return;
+        bool ev = micMuted != null && !force;
+        micMuted = m;
+        Post(new { t = "mic", mute = m.Value, ev });
     }
 
     void PushLevel()
@@ -724,6 +904,7 @@ sealed class IslandForm : Form
         foreach (var w in watching.ToList())
             if (w != "weather" && (w != "wifi" || tick % 4 == 0) && (w != "bt" || tick % 3 == 0)) PushWatched(w, false);
         if (tick % 2 == 0) PushSys();
+        if (ready) PollMic();
         if (tick % 5 == 0) { PushNet(); PushBattery(); }
         if (tick % 10 == 0) brightness.Refresh();   // the monitor's own buttons or Windows may have changed it
         if (ready) CheckCapture(true);
@@ -775,9 +956,33 @@ sealed class IslandForm : Form
         return !Native.IsZoomed(fg);
     }
 
+    long systemFlyoutUntil;
+
+    static void HideSystemFlyout()
+    {
+        IntPtr hwnd = IntPtr.Zero;
+        while ((hwnd = Native.FindWindowEx(IntPtr.Zero, hwnd, "XamlExplorerHostIslandWindow", null)) != IntPtr.Zero)
+        {
+            if (!Native.IsWindowVisible(hwnd) || Native.Title(hwnd).Length != 0 ||
+                !Native.GetWindowRect(hwnd, out var r)) continue;
+            var bounds = Screen.FromHandle(hwnd).Bounds;
+            // Only a compact horizontal shell overlay at the bottom centre of the display.
+            int width = r.Right - r.Left, height = r.Bottom - r.Top;
+            if (height <= 0 || width < 2 * height || width > bounds.Width / 2 ||
+                r.Top < bounds.Top + bounds.Height * .65 ||
+                Math.Abs((r.Left + r.Right) / 2 - (bounds.Left + bounds.Width / 2)) > bounds.Width / 10) continue;
+            if (!string.Equals(Path.GetFileName(Native.ProcessPath(hwnd)), "explorer.exe", StringComparison.OrdinalIgnoreCase)) continue;
+            Native.ShowWindow(hwnd, 0);
+        }
+    }
+
     void CursorTick()
     {
         if (!ready || !Visible) return;
+        if (Environment.TickCount64 < systemFlyoutUntil && settings.OwnFlyouts) HideSystemFlyout();
+        keys?.CheckAltReleased();
+        PollLayout();
+        PollCaps();
         CheckCapture(false);
         Native.GetCursorPos(out var p);
         var local = new Point(p.X - Left, p.Y - Top);
@@ -793,6 +998,9 @@ sealed class IslandForm : Form
         cursorInside = inside;
     }
 
+    readonly EventWaitHandle flyoutsEnabled = new(false, EventResetMode.ManualReset, "Ostrovok.Flyouts." + Environment.ProcessId);
+    Process taskbarGuard;
+
     void CreateTray()
     {
         var auto = new ToolStripMenuItem("Запускать вместе с Windows") { Checked = Autostart.Enabled, CheckOnClick = true };
@@ -804,6 +1012,12 @@ sealed class IslandForm : Form
         var over = new ToolStripMenuItem("Поверх полноэкранных игр и видео") { Checked = settings.OverFullscreen, CheckOnClick = true };
         over.CheckedChanged += (_, _) => { settings.OverFullscreen = over.Checked; settings.Save(); };
         menu.Items.Add(over);
+        var alt = new ToolStripMenuItem("Заменять Alt+Tab") { Checked = settings.AltTab, CheckOnClick = true };
+        alt.CheckedChanged += (_, _) => { settings.AltTab = alt.Checked; settings.Save(); };
+        menu.Items.Add(alt);
+        var osd = new ToolStripMenuItem("Громкость, музыка и Win+Пробел — на островке") { Checked = settings.OwnFlyouts, CheckOnClick = true };
+        osd.CheckedChanged += (_, _) => { settings.OwnFlyouts = osd.Checked; if (osd.Checked) flyoutsEnabled.Set(); else flyoutsEnabled.Reset(); settings.Save(); };
+        menu.Items.Add(osd);
         menu.Items.Add("Обновить избранное", null, (_, _) => { if (ready) PushAll(); });
         menu.Items.Add("Папка настроек", null, (_, _) => { Directory.CreateDirectory(Log.Dir); Shell.Open(Log.Dir); });
         menu.Items.Add("Перезапустить", null, (_, _) => { Process.Start(Application.ExecutablePath); ExitApp(); });
@@ -841,6 +1055,8 @@ sealed class IslandForm : Form
     protected override void OnFormClosed(FormClosedEventArgs e)
     {
         if (fgHook != IntPtr.Zero) Native.UnhookWinEvent(fgHook);
+        brightness.StopWatching();
+        keys?.Dispose();
         if (tray != null) tray.Visible = false;
         base.OnFormClosed(e);
     }

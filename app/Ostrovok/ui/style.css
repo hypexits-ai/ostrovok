@@ -18,7 +18,7 @@ button,input{font-family:inherit}
 .island{transition:opacity .7s ease}
 body.intro .island,body.intro .goo,body.intro #hot{opacity:0}
 .layer{position:absolute;left:50%;top:0;transform:translateX(-50%) scale(.94);opacity:0;filter:blur(6px);pointer-events:none;box-sizing:border-box;transition:opacity .14s,filter .14s,transform .3s}
-.island[data-state="collapsed"] .l-col,.island[data-state="event"] .l-evt,.island[data-state="mini"] .l-mini{opacity:1;filter:none;transform:translateX(-50%);pointer-events:auto;transition:opacity .32s .1s,filter .32s .1s,transform .45s .1s cubic-bezier(.2,.9,.2,1)}
+.island[data-state="collapsed"] .l-col,.island[data-state="event"] .l-evt,.island[data-state="mini"] .l-mini,.island[data-state="alttab"] .l-alt{opacity:1;filter:none;transform:translateX(-50%);pointer-events:auto;transition:opacity .32s .1s,filter .32s .1s,transform .45s .1s cubic-bezier(.2,.9,.2,1)}
 .island[data-state="expanded"] .l-exp{opacity:1;filter:none;transform:translateX(-50%);pointer-events:auto;transition:none}
 .l-exp .stg{opacity:0;transform:translateY(8px) scale(.98);filter:blur(5px);transition:opacity .12s,transform .2s,filter .12s}
 .island[data-state="expanded"] .l-exp .stg{opacity:1;transform:none;filter:none;transition:opacity .4s,transform .55s cubic-bezier(.2,.9,.2,1),filter .4s;transition-delay:calc(.07s + var(--i,0) * .045s)}
@@ -45,31 +45,56 @@ body[data-playing="1"] .i-play,body[data-playing="0"] .i-pause{display:none}
 @keyframes eq{0%{transform:scaleY(.25)}45%{transform:scaleY(1)}100%{transform:scaleY(.45)}}
 body[data-playing="0"] .eq i{animation:none;transform:scaleY(.2);height:100%}
 
-/* app icons hug the left edge, CPU/GPU hug the right edge, and the time keeps the same gap to both:
-   the layer is as wide as its content and the island takes that width */
-.l-col{display:flex;align-items:center;gap:16px;padding:0 14px;height:36px;white-space:nowrap}
-.cl-left,.cl-right,.cl-apps{display:flex;align-items:center;gap:6px;white-space:nowrap}
-.cl-right{gap:9px}
-.cl-left:not(:has(> :not([hidden]):not(:empty))){display:none}
-.cl-mid{font-weight:600;font-size:13px;white-space:nowrap}
+/* collapsed: layout letters on the left, the time in the middle, the battery on the right and, in capsule mode,
+   the drag handle after it. One gap everywhere: between the items and to both edges.
+   The layer is as wide as its content and the island takes that width. */
+.l-col{display:flex;align-items:center;gap:16px;padding:0 16px;height:36px;white-space:nowrap}
+.cl-mid{display:flex;align-items:center;gap:8px;font-weight:600;font-size:13px;white-space:nowrap}
 .timer-chip{display:inline-flex;align-items:center;gap:4px;color:#ffb340}
 .timer-chip .ic{width:14px;height:14px;stroke-width:2}
-/* mini island */
-.l-mini{display:flex;align-items:center;justify-content:center;gap:9px;height:28px;padding:0 12px;font-size:12px;font-weight:600;white-space:nowrap}
+/* mini island: the same row, smaller */
+.l-mini{display:flex;align-items:center;justify-content:center;gap:11px;height:28px;padding:0 11px;font-size:12px;font-weight:600;white-space:nowrap}
 .l-mini .eq{height:11px}
 .l-mini .eq i{width:2px}
 .m-time{display:inline-flex}
-.mchip{display:inline-flex;align-items:center;gap:3px;color:rgba(255,255,255,.88)}
-.mchip .ic{width:13px;height:13px;stroke-width:2;color:#fff}
-.tg-badge{display:inline-flex;align-items:center;gap:3px;height:18px;padding:0 7px 0 5px;border-radius:9px;background:#2aabee;font-size:11.5px;font-weight:700;color:#fff}
-.tg-badge .ic{width:11px;height:11px;stroke-width:2.2}
+/* keyboard layout: plain letters; a switch rolls the old ones up and out and the new ones in from below */
+.kl{display:inline-grid;flex:none;overflow:hidden;font-size:11.5px;font-weight:700;letter-spacing:.02em;line-height:1.2;color:rgba(255,255,255,.78)}
+.l-mini .kl{font-size:11px}
+.kl span,.lay-big span,.lay-name span{grid-area:1/1;display:block;transition:transform .42s cubic-bezier(.2,.9,.2,1),opacity .3s}
+.kl span.out,.lay-big span.out,.lay-name span.out{transform:translateY(-115%);opacity:0}
+.kl span.in,.lay-big span.in,.lay-name span.in{transform:translateY(115%);opacity:0}
+/* battery: an icon only, no numbers */
+.cbat{display:inline-flex;align-items:center;gap:2px;flex:none}
+.cbat svg{display:block;overflow:visible}
+.cbat .bolt{width:7px;height:10px;fill:#5be38f;display:none}
+.cbat.chg .bolt{display:block}
+.cbat .o{fill:none;stroke:rgba(255,255,255,.8);stroke-width:1.3}
+.cbat .n{fill:rgba(255,255,255,.8)}
+.cbat .l{fill:#fff;transition:fill .3s}
+.cbat.chg .l{fill:#5be38f}
+.cbat.low .l{fill:#ff5a5f}
+.cbat.huge{transform:scale(1.5);margin:0 10px 0 8px}
+/* drag handle: two short lines, spaced like any other item; capsule mode only */
+.hdl{position:relative;display:flex;flex-direction:column;justify-content:center;gap:3px;width:12px;height:100%;flex:none;cursor:grab}
+.hdl::before{content:"";position:absolute;inset:0 -9px}   /* a wider grip than it looks */
+.hdl i{display:block;width:12px;height:1.6px;border-radius:2px;background:rgba(255,255,255,.4);transition:background .2s}
+.hdl:hover i,.island.moving .hdl i{background:#fff}
+.island.moving,.island.moving .hdl{cursor:grabbing}
+.island.moving{box-shadow:0 0 0 .5px rgba(255,255,255,.15),0 18px 40px rgba(0,0,0,.5)}
+body.notch .hdl{display:none}
+/* Alt+Tab ribbon: big icons, no labels; the edges fade out */
+.l-alt{width:100%;height:150px;
+  -webkit-mask-image:linear-gradient(90deg,transparent 0,#000 16%,#000 84%,transparent 100%);mask-image:linear-gradient(90deg,transparent 0,#000 16%,#000 84%,transparent 100%)}
+.alt-items{position:absolute;inset:0}
+.alt-it{all:unset;position:absolute;left:50%;top:50%;width:64px;height:64px;margin:-32px 0 0 -32px;cursor:pointer;will-change:transform,opacity}
+.alt-it .app{filter:drop-shadow(0 6px 14px rgba(0,0,0,.5))}
+.alt-it.go .app{animation:launch .45s cubic-bezier(.3,1.6,.5,1)}
 .l-evt{cursor:pointer}
 .ev-msg .avatar{width:44px;height:44px;border-radius:50%;flex:none;background:linear-gradient(135deg,#5ec6ff,#2a8fd8) center/cover;display:grid;place-items:center;font-weight:700;font-size:17px}
 .ev-msg .ev-txt span{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-height:1.3}
-.ev-msg .tg-mark,.ev-tg .tg-mark{width:26px;height:26px;border-radius:50%;background:#2aabee;display:grid;place-items:center;flex:none}
-.ev-msg .tg-mark .ic,.ev-tg .tg-mark .ic{width:14px;height:14px;stroke-width:2.2}
+.ev-msg .tg-mark{width:26px;height:26px;border-radius:50%;background:#2aabee;display:grid;place-items:center;flex:none}
+.ev-msg .tg-mark .ic{width:14px;height:14px;stroke-width:2.2}
 .ev-msg em{font-style:normal;font-size:11px;color:rgba(255,255,255,.45);margin-left:6px;font-weight:500}
-.tchip{display:inline-flex;align-items:center;gap:3px;font-weight:600;font-size:12.5px}
 /* screen capture: a blinking red dot while recording, a camera while taking a screenshot */
 .capi{display:inline-flex;align-items:center;gap:7px;animation:cap-in .35s cubic-bezier(.3,1.6,.5,1)}
 .capi .rec-dot{width:9px;height:9px;border-radius:50%;background:#ff3b30;box-shadow:0 0 7px rgba(255,59,48,.85);animation:rec-blink 1.1s ease-in-out infinite}
@@ -80,7 +105,6 @@ body[data-playing="0"] .eq i{animation:none;transform:scaleY(.2);height:100%}
 @keyframes rec-blink{50%{opacity:.22;box-shadow:none}}
 @keyframes cam-flash{0%{color:#fff;filter:drop-shadow(0 0 6px #fff)}100%{filter:none}}
 @keyframes cap-in{0%{transform:scale(.3);opacity:0}100%{transform:scale(1);opacity:1}}
-.tchip .ic{width:14px;height:14px;color:#fff;stroke-width:2}
 
 .ib{all:unset;cursor:pointer;display:grid;place-items:center;border-radius:50%;color:#fff;transition:background .2s,transform .15s,box-shadow .2s}
 .ib:hover{background:rgba(255,255,255,.12)}
@@ -137,17 +161,6 @@ body[data-playing="0"] .eq i{animation:none;transform:scaleY(.2);height:100%}
 .status{display:flex;align-items:center;gap:9px;padding:0 4px;flex:none}
 .st-net{width:18px;height:18px;display:grid;place-items:center}
 .st-net svg{width:18px;height:18px;fill:none;stroke-linecap:round;stroke-linejoin:round}
-.bat{display:flex;align-items:center;gap:3px}
-.bat .bolt{width:9px;height:12px;fill:#5be38f}
-.bat svg.bat-cell{display:block;width:31px;height:16px;overflow:visible}
-.bat .outline{fill:none;stroke:rgba(255,255,255,.82);stroke-width:1.5}
-.bat .nub{fill:rgba(255,255,255,.82)}
-.bat .lvl{fill:#fff}
-.bat text{font:700 9px var(--ui);letter-spacing:-.02em;text-anchor:middle;dominant-baseline:central}
-.bat .t-out{fill:#fff}.bat .t-in{fill:#000}
-.bat.charging .lvl{fill:#5be38f}
-.bat.low .lvl{fill:#ff5a5f}
-.bat.low .t-in{fill:#fff}
 .wl .cap{text-align:center}
 .xb{grid-row:3;display:flex;align-items:center;gap:10px}
 
@@ -237,8 +250,20 @@ body[data-playing="0"] .eq i{animation:none;transform:scaleY(.2);height:100%}
 .ev-vol .bar{flex:1;height:6px;border-radius:6px;background:rgba(255,255,255,.15);overflow:hidden}
 .ev-vol .bar i{display:block;height:100%;background:#fff;border-radius:inherit;transition:width .15s}
 .ev-vol b{font-size:14px;width:28px;text-align:right}
-.ev-batt em{color:#ff4d5e;font-style:normal;margin-left:6px}
 .ev-batt .ev-txt span{white-space:normal;line-height:1.3}
+/* short system notifications: a round glyph and a line or two */
+.ev-sm{justify-content:center}
+.ev-sm .ev-txt{flex:none}
+.ev .gl{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;flex:none;background:rgba(255,255,255,.14);transition:background .3s}
+.ev .gl .ic{width:16px;height:16px;stroke-width:2}
+.ev .gl.on{background:var(--blue)}
+.ev .gl.red{background:#ff4d5e}
+/* layout switch: big letters and the language name roll over together */
+.ev-lay{justify-content:center;gap:14px}
+.ev-lay .ev-txt{flex:none}
+.lay-big{display:inline-grid;overflow:hidden;font-family:var(--disp);font-size:22px;font-weight:700;letter-spacing:.02em;line-height:1.1;flex:none}
+.ev-txt b.lay-name{display:inline-grid;overflow:hidden;line-height:1.25}
+.ev-txt b.lay-name span{font-size:inherit;color:inherit;overflow:visible}
 .ev-timer .ic{width:30px;height:30px;color:#ffb340}
 .ev-timer b{color:#ffb340}
 .battbig{flex:none;width:66px;height:32px;border-radius:16px;background:rgba(255,77,94,.22);position:relative;display:block}
@@ -266,7 +291,8 @@ body.notch #hot{height:4px}
 .cg{position:absolute;border-radius:32px;will-change:transform;left:-9999px;top:0;width:10px;height:10px}
 
 /* trash cell (drag a window or the player) */
-.trash-geo{position:absolute;left:calc(50% + 378px);top:calc(var(--it,8px) + 127px);width:86px;height:86px;border-radius:43px;transform:translateX(-122px) scale(.5);transition:transform .5s cubic-bezier(.4,0,.6,1)}
+/* to the right of the unfolded island, or to its left when the island stands at the right screen edge (--td -1) */
+.trash-geo{position:absolute;left:var(--tl,calc(50% + 378px));top:calc(var(--it,8px) + 127px);width:86px;height:86px;border-radius:43px;transform:translateX(calc(var(--td,1) * -122px)) scale(.5);transition:transform .5s cubic-bezier(.4,0,.6,1)}
 body.split .trash-geo{transform:none;transition:transform .62s cubic-bezier(.3,1.45,.5,1)}
 body.split .trash-geo.hot{transform:scale(1.1);transition:transform .35s cubic-bezier(.3,1.6,.5,1)}
 .trash{display:grid;place-items:center;color:#ff5a64;opacity:0;pointer-events:none;z-index:6;
@@ -469,3 +495,12 @@ body.split .trash.hot{transition:transform .35s cubic-bezier(.3,1.6,.5,1),backgr
 .pw.danger:hover i{background:#e5484d}
 
 @media (prefers-reduced-motion:reduce){.eq i{animation:none!important;transform:scaleY(.6)}}
+
+.layout-list{position:relative;display:flex;width:max-content;margin:16px auto;max-width:min(230px,calc(100vw - 48px));overflow:hidden;color:#bbb}
+.layout-list span,.layout-list i{width:42px;height:30px;flex:none;border-radius:15px}
+.layout-list span{position:relative;display:grid;place-items:center;font-weight:650;transition:color .18s}
+.layout-list .selected{color:#151515}
+.layout-list i{position:absolute;left:0;top:0;background:#fafafa;transition:transform .24s cubic-bezier(.2,.8,.2,1)}
+@media(prefers-reduced-motion:reduce){.layout-list i,.layout-list span{transition:none}}
+
+.l-col [data-b="time"],.l-mini [data-b="time"]{position:relative;top:-1px}

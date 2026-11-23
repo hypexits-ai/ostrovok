@@ -54,7 +54,8 @@ static class ShellIcons
     public static string Icon(string parsingName, int size = 64)
     {
         if (string.IsNullOrEmpty(parsingName)) return null;
-        if (IconCache.TryGetValue(parsingName, out var cached)) return cached;
+        var cacheKey = size + "|" + parsingName;
+        if (IconCache.TryGetValue(cacheKey, out var cached)) return cached;
         string result = null;
         try
         {
@@ -77,7 +78,7 @@ static class ShellIcons
             }
         }
         catch (Exception ex) { Log.Write($"icon {parsingName}: {ex.Message}"); }
-        IconCache[parsingName] = result;
+        IconCache[cacheKey] = result;
         return result;
     }
 

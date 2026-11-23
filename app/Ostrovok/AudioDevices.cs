@@ -283,6 +283,13 @@ sealed class AudioHub
         mic.SetMasterVolumeLevelScalar(Math.Clamp(v, 0, 1), ref g);
     }
 
+    /// <summary>Is the default microphone muted? null when there is none.</summary>
+    public bool? MicMuted()
+    {
+        var mic = MicVolume(); if (mic == null) return null;
+        try { mic.GetMute(out bool m); return m; } catch { return null; }
+    }
+
     public void ToggleMicMute()
     {
         var mic = MicVolume(); if (mic == null) return;

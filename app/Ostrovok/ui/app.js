@@ -16,17 +16,26 @@ window.addEventListener('unhandledrejection', e => send({ t: 'log', msg: 'promis
 const island = $('#island'), col = $('#col'), exp = $('#exp'), evt = $('#evt');
 const gMain = $('#gMain'), gTrash = $('#gTrash'), trash = $('#trash'), ghost = $('#ghost');
 const EXP = [720, 340, 44];
-const EVT = { vol: [340, 56], batt: [410, 80], track: [430, 72], timer: [360, 72], msg: [460, 84], tg: [330, 60] };
+const ALT_SPACING = 70;
+function ribbonWidth(count) {
+  return Math.min(innerWidth - 16, 620, 116 + ALT_SPACING * Math.max(0, count - 1));
+}
+const EVT = { bright: [340, 56], vol: [340, 56], batt: [410, 80], track: [430, 72], timer: [360, 72], msg: [460, 84], tg: [330, 60],
+              caps: [220, 56], power: [210, 56], mic: [260, 56] };
 const S = {
   hover: false, ev: null, mediaDismissed: false, trashSplit: false, mode: 'capsule', intro: true,
+  pos: null,      // where the user dragged the capsule: { x: centre, y: top }; null = top centre
+  alt: false,     // Alt+Tab ribbon on screen
+  lay: null, bat: null,
   media: { has: false, playing: false }, favs: [], wins: [],
-  sys: { temp: null, load: 0, batt: null, charging: true }, vol: { v: .5, mute: false }, battWarned: false,
+  sys: { batt: null, charging: true }, vol: { v: .5, mute: false }, battWarned: false,
   config: { wifi: false, city: null },
   timer: { total: 300, left: 300, running: false, endAt: 0 },
-  tg: { unread: -1, lastMsgAt: 0, burst: 0 },
+  tg: { lastMsgAt: 0, burst: 0 },
   sw: { ms: 0, running: false, startAt: 0, laps: [] }
 };
 let drag = null, suppressClick = false;
+let mv = null;   // the capsule being moved by its handle
 
 /* ───────── helpers ───────── */
 const setB = (k, v) => $$(`[data-b="${k}"]`).forEach(el => { if (el.textContent !== v) el.textContent = v; });
@@ -68,13 +77,28 @@ const Goo = {
 
 /* ───────── island size and shape (springs) ─────────
    w/h/r: size and corner radius; top: distance from the screen edge (8 capsule, 0 notch);
-   tr: how round the top corners are (1 capsule, 0 notch). */
-const cur = { w: 280, h: 36, r: 18, top: 8, tr: 1 }, vel = { w: 0, h: 0, r: 0, top: 0, tr: 0 };
+   tr: how round the top corners are (1 capsule, 0 notch); cx: the horizontal centre. */
+const cur = { w: 280, h: 36, r: 18, top: 8, tr: 1, cx: Math.round(innerWidth / 2) }, vel = { w: 0, h: 0, r: 0, top: 0, tr: 0, cx: 0 };
 let tgt = { ...cur }, spring = { k: 260, c: 26 }, running = false, last = 0;
 const SHAPE_SPRING = { k: 230, c: 17 };   // a touch of jelly when switching capsule <-> notch
-// while S.intro is set the island waits above the screen edge; it slides in once the saved mode is known
-// a Snipping Tool bar at the top centre (area picker, recording controls): the island steps down below it
-const islandTop = () => (S.intro ? -70 : S.avoid ? S.avoid : S.mode === 'notch' ? 0 : 8);
+let shapeAnimUntil = 0;
+const M = 8;   // the island never comes closer than this to a screen edge
+const clampN = (v, a, b) => Math.max(a, Math.min(b, v));
+// the capsule sits where the user dragged it; notch mode (and a capsule never moved) stays at the top centre
+const moved = () => S.mode !== 'notch' && !!S.pos;
+// where an island of this size goes. A moved capsule keeps its place: it grows sideways only as far as the screen
+// allows, and near the bottom of the screen it grows upwards, keeping its bottom edge where the capsule's was.
+// While S.intro is set the island waits above the screen edge; it slides in once the saved mode is known.
+// A Snipping Tool bar at the top centre (area picker, recording controls): the island steps down below it.
+function placeFor(w, h) {
+  if (!moved()) return { cx: Math.round(innerWidth / 2), top: S.intro ? -70 : S.avoid ? S.avoid : S.mode === 'notch' ? 0 : 8 };
+  const cx = clampN(S.pos.x, w / 2 + M, innerWidth - w / 2 - M);
+  const y = clampN(S.pos.y, M, innerHeight - 36 - M);
+  const top = y + h > innerHeight - M ? Math.max(M, y + 36 - h) : y;
+  return { cx: Math.round(cx), top: Math.round(top) };
+}
+const expandedBox = () => placeFor(EXP[0], EXP[1]);
+const islandTop = () => tgt.top;
 const INTRO_SPRING = { k: 70, c: 10.5 };   // the first appearance: slower, soft, with a small bounce
 let introAnim = false;
 let introPending = false;
@@ -92,11 +116,11 @@ function introStart() {
 }
 
 function mediaShown() { return !!S.media.has && !S.mediaDismissed; }
-// sized from its contents: app icons hug the left edge, CPU/GPU hug the right edge,
-// and the time sits with the same gap to both groups
-function collapsedWidth() { return Math.max(160, Math.ceil(col.offsetWidth)); }
-function visual() { if (S.hover) return 'expanded'; if (S.ev) return 'event'; if (S.idle) return 'mini'; return 'collapsed'; }
-// the mini layer sizes itself to its content (time, equalizer, CPU, GPU); the island follows it
+// sized from its contents: layout on the left, battery (and the drag handle) on the right,
+// the time in the middle; every item keeps the same gap to its neighbours and to the edges
+function collapsedWidth() { return Math.max(120, Math.ceil(col.offsetWidth)); }
+function visual() { if (S.alt) return 'alttab'; if (S.hover) return 'expanded'; if (S.ev) return 'event'; if (S.idle) return 'mini'; return 'collapsed'; }
+// the mini layer sizes itself to its content; the island follows it
 function miniWidth() { return Math.max(96, Math.ceil($('#mini').offsetWidth)); }
 
 function update(snap) {
@@ -105,25 +129,42 @@ function update(snap) {
   if (vs !== 'expanded' && document.body.classList.contains('goo-on') && !(typeof Cells !== 'undefined' && Cells.isOpen())) Goo.reset();
   const cw = collapsedWidth(), mw = miniWidth();
   exp.style.width = EXP[0] + 'px'; exp.style.height = EXP[1] + 'px';
-  const d = vs === 'expanded' ? EXP : vs === 'event' ? [EVT[S.ev.kind][0], EVT[S.ev.kind][1], 38] : vs === 'mini' ? [mw, 28, 14] : [cw, 36, 18];
+  const d = vs === 'alttab' ? [ribbonWidth(rib.items.length), 150, 40] : vs === 'expanded' ? EXP : vs === 'event' ? [...eventSize(S.ev), 38] : vs === 'mini' ? [mw, 28, 14] : [cw, 36, 18];
   // an even width keeps both edges on whole pixels (the island is centred); on a half pixel the notch ears showed a light seam
-  tgt = { w: Math.ceil(d[0] / 2) * 2, h: d[1], r: d[2], top: islandTop(), tr: S.mode === 'notch' && !S.avoid ? 0 : 1 };
+  const w = Math.ceil(d[0] / 2) * 2, p = placeFor(w, d[1]);
+  tgt = { w, h: d[1], r: d[2], top: p.top, tr: S.mode === 'notch' && !S.avoid ? 0 : 1, cx: p.cx };
   spring = tgt.h > cur.h + 1 ? { k: 250, c: 25 } : { k: 420, c: 38 };
-  $('#hot').style.width = (vs === 'mini' ? mw : cw) + 'px';
+  // the hot strip above the island leaves out the drag handle's end, so reaching for the handle never opens it
+  $('#hot').style.width = Math.max(40, (vs === 'mini' ? mw : cw) - (S.mode === 'notch' ? 0 : 64)) + 'px';
+  placeTrash();
   if (snap || reduce) { Object.assign(cur, tgt); for (const k in vel) vel[k] = 0; apply(); }
   kick();
+}
+
+// the trash splits off to the right of the expanded island, or to its left when the island stands at the right edge
+let trashX = 0;
+function placeTrash() {
+  const b = expandedBox(), right = b.cx + 378 + 86 <= innerWidth - 4;
+  trashX = right ? b.cx + 378 : b.cx - 378 - 86;
+  document.documentElement.style.setProperty('--tl', trashX + 'px');
+  document.documentElement.style.setProperty('--td', right ? '1' : '-1');
 }
 
 function apply() {
   const h = Math.max(1, cur.h), r = Math.max(0, Math.min(cur.r, h / 2)), rt = r * Math.max(0, Math.min(1, cur.tr));
   const radius = `${rt.toFixed(2)}px ${rt.toFixed(2)}px ${r.toFixed(2)}px ${r.toFixed(2)}px`;
-  const top = cur.top.toFixed(2) + 'px';
+  const top = cur.top.toFixed(2) + 'px', left = cur.cx.toFixed(2) + 'px';
   for (const el of [island, gMain]) {
     el.style.width = Math.max(1, cur.w).toFixed(2) + 'px';
     el.style.height = h.toFixed(2) + 'px';
     el.style.borderRadius = radius;
     el.style.top = top;
+    el.style.left = left;
   }
+  // the hot strip just above the island: at the screen edge the pointer opens it from there too
+  // (a capsule moved away from the edge has nothing above it to catch)
+  const hot = $('#hot'); hot.style.left = left; hot.style.top = Math.max(0, cur.top - 9).toFixed(2) + 'px';
+  hot.hidden = cur.top > 12;
   // notch "ears": inverse corners that blend the island into the screen edge
   const ear = Math.max(0, 1 - cur.tr) * Math.min(12, h / 3);
   document.documentElement.style.setProperty('--ear', ear.toFixed(2) + 'px');
@@ -134,13 +175,21 @@ function apply() {
 let lastRect = '';
 function postRect() {
   let rects;
-  if ((drag && drag.active) || S.trashSplit) rects = [{ x: 0, y: 0, w: innerWidth, h: innerHeight }];
+  if ((drag && drag.active) || S.trashSplit || (mv && mv.moved)) rects = [{ x: 0, y: 0, w: innerWidth, h: innerHeight }];
   else {
-    let W = Math.max(cur.w, tgt.w) + 28; const H = Math.max(cur.h, tgt.h);   // +28: room for the notch ears
-    if (S.intro || introAnim) W = Math.max(W, 760);   // at start-up the host is busy and applies regions late: leave room to grow
-    // stepped down under a Snipping Tool bar: leave the strip above free, so the bar takes the clicks
-    const y0 = S.avoid ? Math.max(0, Math.floor(Math.min(cur.top, tgt.top))) : 0;
-    rects = [{ x: Math.floor((innerWidth - W) / 2 - 6), y: y0, w: Math.ceil(W + 12), h: Math.ceil(Math.max(0, cur.top, tgt.top) + H + 8) - y0 }];   // never empty: an empty region keeps the window from being drawn for a while
+    // both where the island is and where it is going (it may be moving and growing at once); +14 a side for the notch ears
+    const half = Math.max(cur.w, tgt.w) / 2 + 14 + 6;
+    let x0 = Math.min(cur.cx, tgt.cx) - half, x1 = Math.max(cur.cx, tgt.cx) + half;
+    const tTop = Math.min(cur.top, tgt.top);
+    let tBot = Math.max(cur.top + cur.h, tgt.top + tgt.h, 0);
+    if (S.intro || introAnim) {   // at start-up the host is busy and applies regions late: leave room to grow
+      x0 = Math.min(x0, innerWidth / 2 - 386); x1 = Math.max(x1, innerWidth / 2 + 386);
+      tBot = Math.max(tBot, (moved() ? S.pos.y : 8) + 44);
+    }
+    // at the screen edge the strip above belongs to the island (the hot edge); stepped down under a
+    // Snipping Tool bar it does not, so the bar takes the clicks
+    const y0 = S.avoid && !moved() ? Math.max(0, Math.floor(tTop)) : tTop <= 12 ? 0 : Math.floor(tTop - 10);
+    rects = [{ x: Math.floor(x0), y: y0, w: Math.ceil(x1 - x0), h: Math.max(8, Math.ceil(tBot + 8) - y0) }];   // never empty: an empty region keeps the window from being drawn for a while
     const c = typeof Cells !== 'undefined' ? Cells.rect() : null;
     if (c) rects.push(c);
   }
@@ -152,8 +201,11 @@ function kick() { if (!running) { running = true; last = performance.now(); requ
 function loop(t) {
   const dt = Math.min(.034, Math.max(0, (t - last) / 1000)); last = t;
   let moving = false; const n = 4, h = dt / n;
-  for (const k of ['w', 'h', 'r', 'top', 'tr']) {
-    const sp = k === 'top' && introAnim ? INTRO_SPRING : k === 'top' || k === 'tr' ? SHAPE_SPRING : spring;
+  const shaping = performance.now() < shapeAnimUntil;
+  for (const k of ['w', 'h', 'r', 'top', 'tr', 'cx']) {
+    // the top moves with the jelly spring only while switching capsule <-> notch; otherwise it follows the size,
+    // so an island growing upwards keeps its bottom edge still
+    const sp = k === 'top' && introAnim ? INTRO_SPRING : k === 'tr' || (k === 'top' && shaping) ? SHAPE_SPRING : spring;
     let x = cur[k], v = vel[k]; const T = tgt[k];
     const eps = k === 'tr' ? .002 : .05;
     if (Math.abs(x - T) < eps && Math.abs(v) < eps) { if (x !== T) { cur[k] = T; moving = true; } vel[k] = 0; continue; }
@@ -168,7 +220,7 @@ function loop(t) {
 
 /* ───────── hover ───────── */
 let hovTimer = 0;
-const isMessage = () => S.ev && (S.ev.kind === 'msg' || S.ev.kind === 'tg');
+const isMessage = () => S.ev && S.ev.kind === 'msg';
 // after a while without the pointer the island shrinks to its smallest form
 S.lastActive = Date.now();
 function touchActive() { S.lastActive = Date.now(); if (S.idle) { S.idle = false; update(); } }
@@ -189,7 +241,7 @@ function armDwell(x, y) {
 function dropDwell() { if (dwell) { clearTimeout(dwell.t); dwell = null; } }
 document.addEventListener('pointermove', e => {
   if (!calm() || S.hover) return;
-  if (e.buttons) { dropDwell(); return; }
+  if (e.buttons || onHandle(e.target) || overHandle(e.clientX, e.clientY)) { dropDwell(); return; }
   // over the island but not waiting yet (a button was just released): start waiting from here
   if (!dwell) { if (island.contains(e.target) || e.target === $('#hot')) armDwell(e.clientX, e.clientY); return; }
   if (Math.hypot(e.clientX - dwell.x, e.clientY - dwell.y) > DWELL_PX) armDwell(e.clientX, e.clientY);
@@ -199,8 +251,10 @@ for (const type of ['click', 'contextmenu', 'pointerdown', 'auxclick'])
   island.addEventListener(type, e => { if (calm() && !S.hover) { e.stopPropagation(); e.preventDefault(); } }, true);
 
 function enter(e, rested) {
-  // while the Snipping Tool picks an area the island stays small, so it does not cover the tool's toolbar
-  if (S.snip) return;
+  // while the Snipping Tool picks an area the island stays small, so it does not cover the tool's toolbar;
+  // the Alt+Tab ribbon and a capsule being moved never unfold either
+  if (S.snip || S.alt || mv) return;
+  if (e && overHandle(e.clientX,e.clientY)) { dropDwell(); return; }
   if (calm() && !S.hover && !rested && !isMessage()) {
     if (e && !e.buttons && !dwell) armDwell(e.clientX, e.clientY);   // already waiting: keep that wait
     return;
@@ -222,8 +276,12 @@ function leave(delay = 280) {
     S.hover = false; update();
   }, delay);
 }
-const busy = () => (drag && drag.active);
-island.addEventListener('pointerenter', enter);
+const busy = () => (drag && drag.active) || !!mv;
+// the drag handle (two lines at the capsule's right end) never unfolds the island: it is there to be grabbed.
+// pointerover instead of pointerenter, so coming off the handle onto the island still opens it
+const onHandle = t => !!(t && t.closest && t.closest('.hdl'));
+island.addEventListener('pointerover', e => { if (!onHandle(e.target)) enter(e); });
+island.addEventListener('pointermove', e => { if (!S.hover && !onHandle(e.target)) enter(e); });
 island.addEventListener('pointerleave', () => { if (!busy()) leave(); });
 $('#hot').addEventListener('pointerenter', enter);
 $('#hot').addEventListener('pointerleave', e => { if (!island.contains(e.relatedTarget) && !busy()) leave(); });
@@ -366,12 +424,6 @@ function renderWins() {
   $('#wins').innerHTML = wins.length ? wins.map(w =>
     `<button class="wrow${w.active ? ' act' : ''}" data-win="${w.id}" data-drag="win" title="${esc(w.title)}">${appIcon(w.icon, w.name, 28)}<div><b>${esc(w.name)}</b></div></button>`
   ).join('') : '<div class="wl-empty">Нет открытых окон</div>';
-  const seen = new Set(), icons = [];
-  for (const w of [...wins.filter(w => w.active), ...wins]) {
-    const key = w.icon || w.name; if (seen.has(key)) continue; seen.add(key);
-    icons.push(appIcon(w.icon, w.name, 18)); if (icons.length === 3) break;
-  }
-  $('#c-apps').innerHTML = icons.join('');
   update();
 }
 
@@ -402,21 +454,195 @@ function onNet(m) {
   el.title = !m.online ? 'Нет подключения к интернету' : (m.kind === 'wifi' ? 'Wi-Fi' : 'Кабель') + (m.name ? ' · ' + m.name : '');
 }
 
-/* ───────── battery (laptops) ───────── */
-// as in Windows 11, the percentage inside: outline 28×16, the fill inset 3px on every side (22×10 when full);
-// the number is drawn twice, white over the empty part and dark over the fill
-function onBattery(m) {
-  const el = $('#st-bat');
-  el.hidden = !m.has;
-  if (!m.has) return;
-  const lvl = Math.max(0, Math.min(100, m.level)), low = !m.charging && lvl <= 20, w = Math.round(22 * lvl / 100);
-  el.className = 'bat' + (m.charging ? ' charging' : '') + (low ? ' low' : '');
-  el.title = `Батарея ${lvl}%` + (m.charging ? ', от сети' : '');
-  el.innerHTML = (m.charging ? '<svg class="bolt" viewBox="0 0 9 12"><path d="M5.6 0 0 7h3.4L2.8 12 9 4.6H5.4z"/></svg>' : '')
-    + `<svg class="bat-cell" viewBox="0 0 31 16"><defs><clipPath id="bat-clip"><rect x="3" y="3" width="${w}" height="10" rx="1.5"/></clipPath></defs>`
-    + '<rect class="outline" x=".75" y=".75" width="26.5" height="14.5" rx="4"/><path class="nub" d="M28.5 5h.8a1.2 1.2 0 0 1 1.2 1.2v3.6a1.2 1.2 0 0 1-1.2 1.2h-.8z"/>'
-    + `<rect class="lvl" x="3" y="3" width="${w}" height="10" rx="1.5"/><text class="t-out" x="14" y="8.4">${lvl}</text><text class="t-in" x="14" y="8.4" clip-path="url(#bat-clip)">${lvl}</text></svg>`;
+/* ───────── battery (laptops): an icon only, no numbers anywhere ───────── */
+// the fill shows the charge; red when low on battery, green with a bolt while plugged in
+function batSvg(lvl, big) {
+  const w = big ? 23 : 21, h = big ? 11.5 : 10.5, lw = (w - 4.6) * Math.max(.06, lvl / 100);
+  return '<svg class="bolt" viewBox="0 0 7 10"><path d="M4.2 0 0 5.6h2.7L2.2 10 7 4.2H4.1z"/></svg>'
+    + `<svg class="battery-body" width="${w + 3}" height="${h}" viewBox="0 0 ${w + 3} ${h}"><rect class="o" x=".65" y=".65" width="${w - 1.3}" height="${h - 1.3}" rx="3.2"/>`
+    + `<rect class="n" x="${w + .6}" y="${h / 2 - 2}" width="1.7" height="4" rx=".8"/><rect class="l" x="2.3" y="2.3" width="${lw.toFixed(1)}" height="${(h - 4.6).toFixed(1)}" rx="1.6"/></svg>`;
 }
+const batClass = m => (m.charging ? ' chg' : '') + (!m.charging && m.level <= 20 ? ' low' : '');
+function onBattery(m) {
+  const prev = S.bat;
+  m.level = clampN(m.level, 0, 100);
+  S.bat = m;
+  $$('[data-bat]').forEach(el => {
+    el.hidden = !m.has;
+    if (!m.has) return;
+    el.classList.toggle('chg', !!m.charging); el.classList.toggle('low', !m.charging && m.level <= 20);
+    el.title = m.charging ? 'Батарея · от сети' : 'Батарея';
+    el.innerHTML = batSvg(m.level, el.classList.contains('big'));
+  });
+  // plugged in or out (not at start-up): say so on the island
+  if (m.has && prev && prev.has && prev.charging !== m.charging) showEvent({ kind: 'power', on: !!m.charging });
+  update();
+}
+
+/* ───────── keyboard layout, Caps Lock, microphone ───────── */
+// letters swap in place with a slot motion: the old ones roll up and out while the new ones roll in from below
+function roll(box, txt) {
+  if (!box) return;
+  txt = String(txt ?? '');
+  const old = box.lastElementChild;
+  if (old && old.textContent === txt && !old.classList.contains('out')) return;
+  const nu = document.createElement('span'); nu.textContent = txt;
+  if (!old || reduce) { box.replaceChildren(nu); return; }
+  nu.className = 'in'; box.append(nu);
+  requestAnimationFrame(() => requestAnimationFrame(() => { old.className = 'out'; nu.className = ''; }));
+  setTimeout(() => { old.remove(); update(); }, 460);
+}
+function onLayout(m) {
+  const prev = S.lay;
+  S.lay = m;
+  $$('[data-kl]').forEach(el => { el.hidden = false; roll(el, m.code); el.title = 'Раскладка: ' + (m.name || m.code); });
+  // switched in the same window (not just another window in front with its own layout): the big notification
+  if (m.ev && prev && !S.alt) {
+    showEvent({kind:'lay', code:m.code, previous:prev.code, languages:m.languages || [prev.code,m.code]});
+  }
+  update();
+}
+function onCaps(m) { if (m.ev && !S.alt) showEvent({ kind: 'caps', on: !!m.on }); }
+function onMic(m) { if (m.ev && !S.alt) showEvent({ kind: 'mic', mute: !!m.mute }); }
+
+/* ───────── Alt+Tab: a ribbon of big icons, the selected one magnified in the middle ───────── */
+// Tab moves the selection right and the ribbon slides left under it; several windows of one app simply repeat
+const rib = {
+  box: $('#alt-items'), items: [], pos: 0, target: 0, vel: 0, raf: 0, last: 0,
+  set(list, sel) {
+    this.clearWrap();
+    this.box.innerHTML = '';
+    cancelAnimationFrame(this.raf); this.raf = 0;
+    this.items = list.map((w, i) => {
+      const b = document.createElement('button');
+      b.className = 'alt-it'; b.setAttribute('aria-label', w.name || '');
+      b.innerHTML = appIcon(w.icon, w.name, 64);
+      b.addEventListener('click', () => send({ t: 'alttab.pick', i }));
+      this.box.append(b); return b;
+    });
+    this.pos = this.target = sel; this.vel = 0; this.render();
+  },
+  clearWrap() {
+    this.fade?.cancel();
+    this.ghost?.remove();
+    this.fade = this.ghost = null;
+  },
+  go(sel, delta) {
+    if (sel === this.target) return;
+
+    this.clearWrap();
+    const crossedEnd = sel !== this.target + delta;
+    this.target = sel;
+    if (reduce || crossedEnd) {
+      if (!reduce) {
+        const ghost = this.box.cloneNode(true);
+        ghost.removeAttribute('id');
+        ghost.inert = true;
+        ghost.setAttribute('aria-hidden', 'true');
+        this.box.after(ghost);
+        this.ghost = ghost;
+        const timing = { duration: 380, easing: 'cubic-bezier(.37, 0, .63, 1)' };
+        ghost.animate([{opacity:1},{opacity:0}], timing).onfinish = () => ghost.remove();
+        this.fade = this.box.animate([{opacity:0},{opacity:1}], timing);
+      }
+      cancelAnimationFrame(this.raf);
+      this.raf = 0;
+      this.vel = 0;
+      this.pos = sel;
+      this.render();
+    } else if (!this.raf) {
+      this.last = 0;
+      this.raf = requestAnimationFrame(t => this.step(t));
+    }
+  },
+  step(t) {
+    const dt = this.last ? Math.min(.033, (t - this.last) / 1000) : .016; this.last = t;
+    this.vel += ((this.target - this.pos) * 260 - this.vel * 30) * dt; this.pos += this.vel * dt;
+    if (reduce || (Math.abs(this.target - this.pos) < .0008 && Math.abs(this.vel) < .002)) { this.pos = this.target; this.vel = 0; this.render(); this.raf = 0; return; }
+    this.render(); this.raf = requestAnimationFrame(t2 => this.step(t2));
+  },
+  // a dock-like lens: the selected icon largest, its neighbours shrink and fade smoothly toward the ends
+  render() {
+    const last = this.items.length - 1;
+    const half = Math.min(last / 2, (ribbonWidth(this.items.length) - 116) / (2 * ALT_SPACING));
+    const center = Math.max(half, Math.min(last - half, this.pos));
+    this.items.forEach((el, i) => {
+      const d = i - this.pos, a = Math.abs(d);
+      const x = (i - center) * ALT_SPACING, s = .7 + .42 * Math.exp(-d * d * 1.3), o = Math.max(.55, 1 - a * .13);
+      el.style.transform = `translate(${x.toFixed(1)}px,0) scale(${s.toFixed(3)})`;
+      el.style.opacity = o.toFixed(3); el.style.zIndex = 100 - Math.round(a * 10);
+      el.style.pointerEvents = o < .15 ? 'none' : '';
+    });
+  }
+};
+let altWheelAt = 0, altCloseTimer;
+$('#alt').addEventListener('wheel', e => {
+  e.preventDefault();
+  const d = Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX, now = performance.now();
+  if (!d || now - altWheelAt < 70) return;
+  altWheelAt = now; send({ t: 'alttab.step', d: Math.sign(d) });
+}, { passive: false });
+function onAltTab(m) {
+  if (m.on === true) {
+    if (Cells.isOpen()) Cells.close(false);
+    dropDwell(); clearTimeout(hovTimer); S.hover = false;
+    clearTimeout(altCloseTimer);
+    S.alt = true; rib.set(m.list || [], m.sel || 0);
+    update();
+  } else if (m.on === false) {
+    if (!S.alt) return;
+    const el = m.picked && rib.items[rib.target];
+    if (el) { el.classList.remove('go'); void el.offsetWidth; el.classList.add('go'); }
+    altCloseTimer = setTimeout(() => { S.alt = false; touchActive(); update(); }, el && !reduce ? 140 : 0);
+  } else if (typeof m.sel === 'number' && S.alt) rib.go(m.sel, m.delta);
+}
+
+/* ───────── moving the capsule by its handle ───────── */
+// capsule mode only; it goes anywhere on the screen and stays there. Dropped near the top centre it snaps
+// back home; a double click on the lines sends it home too.
+function capsuleHome() { S.pos = null; send({ t: 'pos' }); update(); }
+document.addEventListener('pointerdown', e => {
+  if (e.button !== 0 || !onHandle(e.target) || S.mode === 'notch' || S.alt || calm()) return;
+  e.preventDefault(); e.stopPropagation();
+  clearTimeout(hovTimer); dropDwell();
+  const h = e.target.closest('.hdl');
+  mv = { h, pid: e.pointerId, sx: e.clientX, sy: e.clientY, x0: tgt.cx, y0: tgt.top, moved: false };
+  try { h.setPointerCapture(e.pointerId); } catch (_) {}
+}, true);
+document.addEventListener('pointermove', e => {
+  if (!mv || e.pointerId !== mv.pid) return;
+  const dx = e.clientX - mv.sx, dy = e.clientY - mv.sy;
+  if (!mv.moved) {
+    if (Math.hypot(dx, dy) < 3) return;
+    mv.moved = true; island.classList.add('moving'); postRect();
+  }
+  const half = tgt.w / 2;
+  S.pos = { x: Math.round(clampN(mv.x0 + dx, half + M, innerWidth - half - M)), y: Math.round(clampN(mv.y0 + dy, M, innerHeight - 36 - M)) };
+  update();
+  // the island follows the pointer exactly; only its size keeps springing
+  cur.cx = tgt.cx; cur.top = tgt.top; vel.cx = vel.top = 0; apply();
+}, true);
+function endMove(e) {
+  if (!mv || (e && e.pointerId !== mv.pid)) return;
+  const m = mv; mv = null;
+  island.classList.remove('moving');
+  try { m.h.releasePointerCapture(m.pid); } catch (_) {}
+  if (!m.moved) return;
+  if (Math.abs(S.pos.x - innerWidth / 2) < 30 && S.pos.y < 30) capsuleHome();
+  else { send({ t: 'pos', x: S.pos.x, y: S.pos.y }); update(); }
+  S.lastActive = Date.now();
+}
+document.addEventListener('pointerup', endMove, true);
+document.addEventListener('pointercancel', endMove, true);
+document.addEventListener('dblclick', e => { if (onHandle(e.target) && S.mode !== 'notch') capsuleHome(); });
+// the host saw the pointer arrive: the drag handle and the strip beside it do not count
+function overHandle(x, y) {
+  const vs = visual(), h = vs === 'collapsed' ? $('#col .hdl') : vs === 'mini' ? $('#mini .hdl') : null;
+  if (!h || S.mode === 'notch') return false;
+  const r = h.getBoundingClientRect();
+  return x >= r.left - 6 && y >= r.top - 16 && y <= r.bottom + 16;
+}
+addEventListener('resize', () => update());
 
 /* ───────── screen brightness ───────── */
 const bright = (() => {
@@ -515,33 +741,12 @@ function onLevel(v) {
   $$('.eq').forEach(el => el.style.setProperty('--lv', lv));
 }
 
-/* ───────── system ───────── */
+/* ───────── low battery warning ───────── */
 function renderSys() {
-  const { temp, load } = S.sys;
-  const hasTemp = temp !== null && temp !== undefined;
-  const v = hasTemp ? temp : load;
-  const color = hasTemp ? (temp < 60 ? '#5be38f' : temp < 75 ? '#ffc145' : '#ff5a5a') : (load < 50 ? '#5be38f' : load < 80 ? '#ffc145' : '#ff5a5a');
-  document.documentElement.style.setProperty('--tc', color);
-  setB('chip', hasTemp ? temp + '°' : load + '%');
-  $('#c-ic use').setAttribute('href', hasTemp ? '#g-therm' : '#g-cpu');
-  setB('g-main', hasTemp ? temp + '°' : load + '%');
-  setB('g-sub', hasTemp ? 'ЦП ' + load + '%' : 'загрузка ЦП');
-  $$('.cpu-mini:not(.gpu-mini) .g-val').forEach(el => el.style.strokeDashoffset = (163.4 * (1 - Math.min(100, v) / 100)).toFixed(1));
-  setB('cpu-pct', (hasTemp ? temp + '° ' : '') + load + '%');
-  // graphics card
-  const gpu = S.sys.gpu, hasGpu = gpu !== null && gpu !== undefined;
-  $('#gpu-mini').hidden = !hasGpu; $('#mini .m-gpu').hidden = !hasGpu; $('#c-gpu').hidden = !hasGpu;
-  if (hasGpu) {
-    document.documentElement.style.setProperty('--gc', gpu < 50 ? '#5be38f' : gpu < 80 ? '#ffc145' : '#ff5a5a');
-    setB('gpu-main', gpu + '%'); setB('gpu-pct', gpu + '%');
-    $('#gpu-ring').style.strokeDashoffset = (163.4 * (1 - Math.min(100, gpu) / 100)).toFixed(1);
-  }
-  update();
   const b = S.sys.batt;
-  if (b !== null && b !== undefined) {
-    if (!S.sys.charging && b <= 15 && !S.battWarned) { S.battWarned = true; showEvent({ kind: 'batt', pct: b }); }
-    if (S.sys.charging || b > 20) S.battWarned = false;
-  }
+  if (b === null || b === undefined) return;
+  if (!S.sys.charging && b <= 15 && !S.battWarned) { S.battWarned = true; showEvent({ kind: 'batt' }); }
+  if (S.sys.charging || b > 20) S.battWarned = false;
 }
 
 /* ───────── volume + toggles ───────── */
@@ -618,13 +823,13 @@ const plural = (n, one, few, many) => { const a = n % 100, b = n % 10; return a 
 function showEvent(e) {
   S.ev = e; renderEvent();
   clearTimeout(evTimer);
-  const ms = { vol: 1600, timer: 6000, msg: 5500, tg: 4000 }[e.kind] || 3600;
+  const ms = { bright: 1600, vol: 1600, timer: 6000, msg: 5500, lay: 1900, caps: 1600, mic: 1800, power: 2200 }[e.kind] || 3600;
   evTimer = setTimeout(() => { S.ev = null; update(); }, ms);
   update();
 }
 // a click on a Telegram notification opens Telegram
 evt.addEventListener('click', () => {
-  if (!S.ev || (S.ev.kind !== 'msg' && S.ev.kind !== 'tg')) return;
+  if (!S.ev || S.ev.kind !== 'msg') return;
   send({ t: 'tg.open' });
   clearTimeout(evTimer); S.ev = null; S.evHold = false; update();
 });
@@ -637,34 +842,60 @@ function onTgMessage(m) {
   S.tg.lastMsgAt = now;
   showEvent({ kind: 'msg', name: m.name, text: m.text, avatar: m.avatar, more: S.tg.burst });
 }
-function onTgUnread(n) {
-  const prev = S.tg.unread;
-  S.tg.unread = n;
-  const badge = $('#c-tg');
-  badge.hidden = !(n > 0);
-  badge.querySelector('b').textContent = n > 99 ? '99+' : n;
-  update();
-  // Telegram without Windows notifications: at least say that something new came in
-  if (prev >= 0 && n > prev) setTimeout(() => { if (Date.now() - S.tg.lastMsgAt > 3000 && !S.hover) showEvent({ kind: 'tg', n }); }, 2000);
+// (the "N unread" counter is gone: only messages from a person show up)
+function eventSize(e) {
+  if (e.kind !== 'lay') return EVT[e.kind];
+  const list = evt.querySelector('.layout-list');
+  const padding = 16;
+  return [Math.min(innerWidth - 16, list.offsetWidth + padding * 2), list.offsetHeight + padding * 2];
 }
 function renderEvent() {
   const e = S.ev; if (!e) return;
-  evt.style.width = EVT[e.kind][0] + 'px'; evt.style.height = EVT[e.kind][1] + 'px';
-  if (e.kind === 'vol') {
-    const p = Math.round(S.vol.v * 100);
-    evt.innerHTML = `<div class="ev ev-vol">${ic(S.vol.mute ? 'mute' : 'vol')}<div class="bar"><i style="width:${S.vol.mute ? 0 : p}%"></i></div><b>${S.vol.mute ? '—' : p}</b></div>`;
+  if (e.kind !== 'lay') { evt.style.width = EVT[e.kind][0] + 'px'; evt.style.height = EVT[e.kind][1] + 'px'; }
+  if (e.kind === 'vol' || e.kind === 'bright') {
+    const brightness = e.kind === 'bright', p = brightness ? e.level : Math.round(S.vol.v * 100);
+    const muted = !brightness && S.vol.mute;
+    if (evt.firstElementChild?.dataset.meter !== e.kind) {
+      evt.innerHTML = '<div class="ev ev-vol">' + ic(brightness ? 'sun' : 'vol') + '<div class="bar"><i></i></div><b></b></div>';
+      evt.firstElementChild.dataset.meter = e.kind;
+    }
+    if (!brightness) evt.firstElementChild.firstElementChild.outerHTML = ic(muted ? 'mute' : 'vol');
+    evt.querySelector('.bar i').style.width = (muted ? 0 : p) + '%';
+    evt.querySelector('b').textContent = muted ? '—' : p;
   } else if (e.kind === 'track') {
     const m = S.media;
     evt.innerHTML = `<div class="ev"><div class="cover" style="${m.art ? `background-image:url('${m.art}')` : ''}"></div><div class="ev-txt"><b>${esc(m.title)}</b><span>${esc(m.artist || 'Сейчас играет')}</span></div><span class="eq"><i></i><i></i><i></i><i></i><i></i></span></div>`;
   } else if (e.kind === 'msg') {
     const av = e.avatar ? `<span class="avatar" style="background-image:url('${e.avatar}')"></span>` : `<span class="avatar">${esc((e.name || '?').trim().charAt(0).toUpperCase())}</span>`;
     evt.innerHTML = `<div class="ev ev-msg">${av}<div class="ev-txt"><b>${esc(e.name)}${e.more ? `<em>и ещё ${e.more}</em>` : ''}</b><span>${esc(e.text || 'Новое сообщение')}</span></div><span class="tg-mark">${ic('send')}</span></div>`;
-  } else if (e.kind === 'tg') {
-    evt.innerHTML = `<div class="ev ev-tg"><span class="tg-mark">${ic('send')}</span><div class="ev-txt"><b>Telegram</b><span>${e.n} ${plural(e.n, 'непрочитанное', 'непрочитанных', 'непрочитанных')}</span></div></div>`;
+  } else if (e.kind === 'lay') {
+    const labels = e.languages;
+    let list = evt.querySelector('.layout-list');
+    if (!list || list.dataset.labels !== JSON.stringify(labels)) {
+      evt.innerHTML = '<div class="layout-list"></div>';
+      list = evt.firstElementChild;
+      list.dataset.labels = JSON.stringify(labels);
+      list.innerHTML = '<i></i>' + labels.map(code => '<span>' + esc(code) + '</span>').join('');
+      list.firstElementChild.style.transform = 'translateX(' + Math.max(0, labels.indexOf(e.previous)) * 100 + '%)';
+      list.getBoundingClientRect();
+    }
+    const [width, height] = eventSize(e);
+    evt.style.width = width + 'px'; evt.style.height = height + 'px';
+    const idx = labels.indexOf(e.code);
+    list.firstElementChild.style.transform = 'translateX(' + idx * 100 + '%)';
+    list.scrollLeft = Math.max(0, idx * 42 - list.clientWidth / 2 + 21);
+    Array.from(list.children).slice(1).forEach((item,i) => item.classList.toggle('selected', i === idx));
+  } else if (e.kind === 'caps') {
+    evt.innerHTML = `<div class="ev ev-sm"><span class="gl${e.on ? ' on' : ''}">${ic('caps')}</span><div class="ev-txt"><b>Caps Lock</b><span>${e.on ? 'включён' : 'выключен'}</span></div></div>`;
+  } else if (e.kind === 'mic') {
+    evt.innerHTML = `<div class="ev ev-sm"><span class="gl${e.mute ? ' red' : ''}">${ic(e.mute ? 'micoff' : 'mic')}</span><div class="ev-txt"><b>Микрофон ${e.mute ? 'выключен' : 'включён'}</b></div></div>`;
+  } else if (e.kind === 'power') {
+    const b = S.bat || { level: 50, charging: e.on };
+    evt.innerHTML = `<div class="ev ev-sm ev-power"><span class="cbat huge${batClass(b)}">${batSvg(b.level, true)}</span><div class="ev-txt"><b>${e.on ? 'Заряжается' : 'От батареи'}</b></div></div>`;
   } else if (e.kind === 'timer') {
     evt.innerHTML = `<div class="ev ev-timer">${ic('timer')}<div class="ev-txt"><b>Таймер</b><span>Время вышло</span></div></div>`;
   } else {
-    evt.innerHTML = `<div class="ev ev-batt"><div class="ev-txt"><b>Низкий заряд<em>${e.pct}%</em></b><span>Включите экономию энергии или поставьте ноутбук на зарядку</span></div><span class="battbig"></span></div>`;
+    evt.innerHTML = `<div class="ev ev-batt"><div class="ev-txt"><b>Низкий заряд</b><span>Включите экономию энергии или поставьте ноутбук на зарядку</span></div><span class="battbig"></span></div>`;
   }
 }
 
@@ -676,7 +907,7 @@ function splitTrash(on) {
   else { document.body.classList.remove('split'); setHot(false, 0); Goo.need('trash', false); }
   postRect();
 }
-function trashRect() { return { x: innerWidth / 2 + 378, y: islandTop() + 127, w: 86, h: 86 }; }
+function trashRect() { return { x: trashX, y: expandedBox().top + 127, w: 86, h: 86 }; }
 function setHot(on, heat) {
   trash.style.setProperty('--heat', heat.toFixed(2));
   if (on === hot) return;
@@ -769,6 +1000,7 @@ function armPower(b, on) {
 }
 function setMode(mode, save) {
   if (mode !== 'notch' && mode !== 'capsule') return;
+  if (S.mode !== mode) shapeAnimUntil = performance.now() + 1200;   // the jelly move between capsule and notch
   S.mode = mode;
   document.body.classList.toggle('notch', mode === 'notch');
   $$('[data-act^="mode-"]').forEach(x => x.classList.toggle('on', x.dataset.act === 'mode-' + mode));
@@ -802,6 +1034,7 @@ document.addEventListener('contextmenu', e => {
   e.preventDefault();
   const t = e.target.closest('[data-cell]');
   if (t && island.contains(t) && visual() === 'expanded') Cells.toggle(t.dataset.cell, t);
+  else if (island.contains(e.target)) send({t:'app.menu'});
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') Cells.close(); });
 // the user clicked another window while typing in a cell: put the cell away.
@@ -821,15 +1054,23 @@ if (host) host.addEventListener('message', e => {
     case 'sys': S.sys = m; renderSys(); break;
     case 'vol': onVol(m); break;
     case 'radios': onRadios(m); break;
-    case 'config': S.config = m; onRadios(S.radios || {}); setMode(m.mode || 'capsule', false); introStart(); break;
+    case 'config':
+      S.config = m; S.pos = m.pos || null;
+      onRadios(S.radios || {}); setMode(m.mode || 'capsule', false);
+      if (S.intro && moved()) update(true);   // a capsule with its own place fades in right there, no slide from the edge
+      introStart(); break;
     case 'tg': onTgMessage(m); break;
     case 'net': onNet(m); break;
     case 'battery': onBattery(m); break;
-    case 'bright': bright.update(m); break;
+    case 'bright': bright.update(m); if (m.ext && m.ok && !S.hover) showEvent({kind:'bright', level:m.v}); break;
     case 'game': S.game = !!m.game; S.fs = !!m.fs; if (!calm()) dropDwell(); break;
-    case 'enter': if (!S.hover) enter({ clientX: m.x, clientY: m.y, buttons: m.held ? 1 : 0 }); break;
+    case 'enter': if (!S.hover && !overHandle(m.x, m.y)) enter({ clientX: m.x, clientY: m.y, buttons: m.held ? 1 : 0 }); break;
     case 'capture': onCapture(m); break;
-    case 'tgUnread': onTgUnread(m.n); break;
+    case 'tgUnread': break;   // no longer shown
+    case 'layout': onLayout(m); break;
+    case 'caps': onCaps(m); break;
+    case 'mic': onMic(m); break;
+    case 'alttab': onAltTab(m); break;
     case 'leave': dropDwell(); if (S.hover && !busy() && !Cells.holdsFocus()) leave(120); break;
     default: Cells.onHost(m);
   }

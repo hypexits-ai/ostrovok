@@ -75,6 +75,7 @@
   <symbol id="g-gpu"viewBox="0 0 24 24"><rect x="2.5" y="6.5" width="19" height="11" rx="2"/><circle cx="9" cy="12" r="2.6"/><path d="M15 10h3.5M15 13.5h3.5M5 17.5v2M8.5 17.5v2"/></symbol>
   <symbol id="g-send" viewBox="0 0 24 24"><path d="M20.5 3.8L3.8 10.6l7 2.6 2.6 7z"/><path d="M20.5 3.8l-9.7 9.4"/></symbol>
   <symbol id="g-camera" viewBox="0 0 24 24"><path d="M3.5 8.5A1.5 1.5 0 0 1 5 7h2.4l1.5-2.2h6.2L16.6 7H19a1.5 1.5 0 0 1 1.5 1.5v9A1.5 1.5 0 0 1 19 19H5a1.5 1.5 0 0 1-1.5-1.5z"/><circle cx="12" cy="12.8" r="3.5"/></symbol>
+  <symbol id="g-caps" viewBox="0 0 24 24"><path d="M12 4.5 4.8 12h4.2v4.5h6V12h4.2z"/><path d="M9 19.5h6"/></symbol>
   <symbol id="g-timer" viewBox="0 0 24 24"><circle cx="12" cy="13.5" r="7.5"/><path d="M12 13.5V9.5M9.5 2.5h5"/></symbol>
 </svg>
 
@@ -85,11 +86,18 @@
 <div class="island" id="island" data-state="collapsed">
   <div class="clip">
 
+    <!-- collapsed: layout on the left, time in the middle, battery on the right; in capsule mode the drag handle
+         after it. Every item keeps the same 16px gap, to its neighbours and to the edges. -->
     <div class="layer l-col" id="col">
-      <div class="cl-left"><div class="cover mini only-media" data-cover></div><span class="cl-apps" id="c-apps"></span></div>
-      <div class="cl-mid"><span data-b="time" id="c-time"></span><span class="timer-chip" id="c-timer" hidden><svg class="ic"><use href="#g-timer"/></svg><b></b></span></div>
-      <div class="cl-right"><span class="tg-badge" id="c-tg" title="Непрочитанные в Telegram" hidden><svg class="ic"><use href="#g-send"/></svg><b></b></span><span class="eq only-playing"><i></i><i></i><i></i><i></i><i></i></span><span class="capi" hidden title="Идёт запись экрана"><i class="rec-dot"></i><svg class="ic cam"><use href="#g-camera"/></svg></span><span class="tchip" id="c-gpu" hidden><svg class="ic"><use href="#g-gpu"/></svg><b data-b="gpu-pct"></b></span><span class="tchip"><svg class="ic" id="c-ic"><use href="#g-therm"/></svg><b data-b="chip"></b></span></div>
+      <span class="kl" data-kl title="Раскладка клавиатуры" hidden></span>
+      <div class="cl-mid"><div class="cover mini only-media" data-cover></div><span data-b="time" id="c-time"></span><span class="timer-chip" id="c-timer" hidden><svg class="ic"><use href="#g-timer"/></svg><b></b></span><span class="eq only-playing"><i></i><i></i><i></i><i></i><i></i></span></div>
+      <span class="capi" hidden title="Идёт запись экрана"><i class="rec-dot"></i><svg class="ic cam"><use href="#g-camera"/></svg></span>
+      <span class="cbat" data-bat hidden></span>
+      <span class="hdl" title="Потяните, чтобы передвинуть · двойной клик — вернуть наверх"><i></i><i></i></span>
     </div>
+
+    <!-- Alt+Tab: a ribbon of big window icons; the selected one sits in the middle -->
+    <div class="layer l-alt" id="alt"><div class="alt-items" id="alt-items"></div></div>
 
     <div class="layer l-exp" id="exp">
       <div class="xt stg" style="--i:0">
@@ -106,7 +114,7 @@
         </div>
         <div class="lift" title="Вид островка"><button class="lb" data-act="mode-notch" title="Вырез: прижать к краю экрана"><svg class="ic"><use href="#g-up"/></svg></button><button class="lb on" data-act="mode-capsule" title="Капсула"><svg class="ic"><use href="#g-down"/></svg></button></div>
         <!-- status: plain icons, not buttons (the Wi-Fi button lives in the bottom row) -->
-        <div class="status"><span class="st-net" id="st-net" hidden></span><span class="bat" id="st-bat" hidden></span></div>
+        <div class="status"><span class="st-net" id="st-net" hidden></span><span class="cbat big" id="st-bat" data-bat hidden></span></div>
         <button class="ib sq" data-act="settings" title="Параметры Windows"><svg class="ic"><use href="#g-gear"/></svg></button>
         <button class="ib sq pw-btn" data-act="power" data-cell="power" title="Выключение · правый клик — сон и перезагрузка"><svg class="ic"><use href="#g-power"/></svg><span>Выключить?</span></button>
       </div>
@@ -135,26 +143,19 @@
           <button class="tg mute" data-act="mute" data-cell="sound" id="t-mute" title="Без звука · правый клик — звук"><svg class="ic"><use href="#g-mute"/></svg></button>
         </div>
         <label class="vol" data-cell="sound" title="Правый клик — устройства и микшер"><svg class="ic"><use href="#g-vol"/></svg><input class="rng" type="range" id="vol" min="0" max="100" value="50" aria-label="Громкость"><b id="vol-n">50</b></label>
-        <div class="cpu-mini rc" data-act="taskmgr" data-cell="cpu" title="Процессор · правый клик — что нагружает компьютер">
-          <div class="gauge"><svg viewBox="0 0 64 64"><circle class="g-tr" cx="32" cy="32" r="26"/><circle class="g-val" cx="32" cy="32" r="26"/></svg><svg class="ic g-ic"><use href="#g-cpu"/></svg></div>
-          <b data-b="g-main"></b>
-        </div>
-        <div class="cpu-mini gpu-mini rc" data-act="taskmgr" data-cell="cpu" id="gpu-mini" title="Видеокарта · правый клик — подробнее" hidden>
-          <div class="gauge"><svg viewBox="0 0 64 64"><circle class="g-tr" cx="32" cy="32" r="26"/><circle class="g-val" id="gpu-ring" cx="32" cy="32" r="26"/></svg><svg class="ic g-ic"><use href="#g-gpu"/></svg></div>
-          <b data-b="gpu-main"></b>
-        </div>
       </div>
     </div>
 
     <div class="layer l-evt" id="evt"></div>
 
-    <!-- the smallest form, after a while without the pointer: only time, music, CPU and GPU -->
+    <!-- the smallest form, after a while without the pointer: the same three things, smaller -->
     <div class="layer l-mini" id="mini">
-      <span class="eq only-playing"><i></i><i></i><i></i><i></i><i></i></span>
+      <span class="kl" data-kl hidden></span>
       <span class="m-time"><span data-b="time" class="m-clock"></span><span class="timer-chip m-timer" hidden><svg class="ic"><use href="#g-timer"/></svg><b></b></span></span>
+      <span class="eq only-playing"><i></i><i></i><i></i><i></i><i></i></span>
       <span class="capi m-cap" hidden><i class="rec-dot"></i><svg class="ic cam"><use href="#g-camera"/></svg></span>
-      <span class="mchip m-cpu"><svg class="ic"><use href="#g-cpu"/></svg><b data-b="cpu-pct"></b></span>
-      <span class="mchip m-gpu" hidden><svg class="ic"><use href="#g-gpu"/></svg><b data-b="gpu-pct"></b></span>
+      <span class="cbat" data-bat hidden></span>
+      <span class="hdl" title="Потяните, чтобы передвинуть · двойной клик — вернуть наверх"><i></i><i></i></span>
     </div>
   </div>
 </div>

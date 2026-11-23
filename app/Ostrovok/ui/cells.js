@@ -7,7 +7,8 @@ const Cells = (() => {
   const cellEl = $('#cell'), gCell = $('#gCell');
   let cc = $('#cc');
   const GAP = 16;
-  const ISL = () => ({ x: innerWidth / 2 - 360, y: islandTop(), w: 720, h: 340 });
+  // where the unfolded island stands (a moved capsule unfolds where it is, kept on screen)
+  const ISL = () => { const b = expandedBox(); return { x: b.cx - 360, y: b.top, w: 720, h: 340 }; };
   // [width, height, side]; 0 = take the island's size on that axis
   const SIZES = {
     search: [720, 360, 'below'], cal: [520, 0, 'left'], player: [720, 200, 'below'], favs: [320, 0, 'left'],
@@ -29,7 +30,11 @@ const Cells = (() => {
     if (side === 'left') return { side, wide: false, x: I.x - GAP - w, y: I.y, w, h: I.h, ox: w, oy, dx: GAP + w * .6, dy: 0 };
     if (side === 'right') return { side, wide: false, x: I.x + I.w + GAP, y: I.y, w, h: I.h, ox: 0, oy, dx: -(GAP + w * .6), dy: 0 };
     h = h || BELOW_HEIGHT[kind];
-    return { side: 'below', wide: SIZES[kind][2] !== 'below', x: I.x, y: I.y + I.h + GAP, w: I.w, h, ox: tr.left + tr.width / 2 - I.x, oy: 0, dx: 0, dy: -(GAP + h * .5) };
+    const ox = tr.left + tr.width / 2 - I.x, wide = SIZES[kind][2] !== 'below';
+    // an island moved down the screen has no room below it: the cell rises above it instead
+    if (I.y + I.h + GAP + h > innerHeight - 8 && I.y - GAP - h >= 8)
+      return { side: 'above', wide, x: I.x, y: I.y - GAP - h, w: I.w, h, ox, oy: h, dx: 0, dy: GAP + h * .5 };
+    return { side: 'below', wide, x: I.x, y: I.y + I.h + GAP, w: I.w, h, ox, oy: 0, dx: 0, dy: -(GAP + h * .5) };
   }
   function spring(from, to, k, c) {
     let x = from, v = 0, t = 0; const out = [], dt = 1 / 240;
@@ -42,7 +47,7 @@ const Cells = (() => {
     return out;
   }
   function frames(g, series) {
-    const vertical = g.side === 'below';
+    const vertical = g.side === 'below' || g.side === 'above';
     return series.map(([p, v]) => {
       const s = .3 + .7 * p;
       const a = 1 + Math.max(-.05, Math.min(.06, v * .028)), b = 1 - (a - 1) * .6;
@@ -58,14 +63,14 @@ const Cells = (() => {
   }
   function recoil(side, amp, delay) {
     if (reduce) return;
-    const f = [], axis = side === 'below' ? 'scaleY' : 'scaleX';
+    const f = [], axis = side === 'below' || side === 'above' ? 'scaleY' : 'scaleX';
     for (let i = 0; i <= 60; i++) {
       const t = i / 60 - delay, d = Math.max(0, t);
       const s = 1 + (t <= 0 ? 0 : amp * Math.exp(-d * 6.5) * Math.sin(d * 2 * Math.PI * 3.1));
       f.push({ transform: `translateX(-50%) ${axis}(${s.toFixed(5)})` });
     }
     f.push({ transform: 'translateX(-50%)' });
-    const origin = side === 'below' ? '50% 0' : side === 'left' ? '0% 50%' : '100% 50%';
+    const origin = side === 'below' ? '50% 0' : side === 'above' ? '50% 100%' : side === 'left' ? '0% 50%' : '100% 50%';
     for (const el of [island, gMain]) { el.style.transformOrigin = origin; el.animate(f, { duration: f.length * 1000 / 60, easing: 'linear' }); }
   }
 
@@ -131,6 +136,7 @@ const Cells = (() => {
     if (!visible || !geo) return null;
     const I = ISL(), g = geo;
     if (g.side === 'below') return { x: Math.floor(g.x - 6), y: I.y + I.h - 4, w: Math.ceil(g.w + 12), h: Math.ceil(g.y + g.h - (I.y + I.h) + 12) };
+    if (g.side === 'above') return { x: Math.floor(g.x - 6), y: Math.max(0, g.y - 8), w: Math.ceil(g.w + 12), h: Math.ceil(I.y + 4 - Math.max(0, g.y - 8)) };
     if (g.side === 'left') return { x: Math.floor(g.x - 6), y: g.y - 4, w: Math.ceil(I.x - g.x + 10), h: Math.ceil(g.h + 12) };
     return { x: Math.floor(I.x + I.w - 4), y: g.y - 4, w: Math.ceil(g.x + g.w - (I.x + I.w) + 10), h: Math.ceil(g.h + 12) };
   }

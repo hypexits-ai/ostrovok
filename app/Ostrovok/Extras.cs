@@ -132,6 +132,13 @@ sealed class AppSettings
     public string Mode { get; set; } = "capsule";
     /// <summary>Stay visible over borderless full-screen games and videos (exclusive full screen still hides it).</summary>
     public bool OverFullscreen { get; set; } = true;
+    /// <summary>Alt+Tab opens the island's window ribbon instead of the Windows switcher.</summary>
+    public bool AltTab { get; set; } = true;
+    /// <summary>The volume and media keys are handled by the island, so Windows does not show its own flyout.</summary>
+    public bool OwnFlyouts { get; set; } = true;
+    /// <summary>Where the user dragged the capsule: its centre and top, in page pixels. null = top centre.</summary>
+    public double? PosX { get; set; }
+    public double? PosY { get; set; }
 
     static string FilePath => Path.Combine(Log.Dir, "settings.json");
 
